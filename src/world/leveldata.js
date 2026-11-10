@@ -172,8 +172,8 @@ function dropAndNets(L) {
   L.piece('deck_s', 291, 9.0, 47);
   L.piece('net', 291, 7.7, 47);
   L.piece('deck_m', 291, 6.5, 52);
-  L.piece('crate', 296, 6.2, 52);
-  L.arcDeck(286, 310, 5.3, 7.1, y1, y1);
+  L.piece('crate', 297, 6.3, 52);
+  L.arcDeck(302.5, 310, 5.3, 7.1, y1, y1);       // starts past the crate, so nothing is overhead
   L.treatLine([291, 8, 38], [291, 8, 41], 3);
   L.treatLine([277, 8.3, 43], [277, 8.3, 46], 3);
   L.treatLine([291, 8.3, 48], [291, 8.3, 51], 3);
