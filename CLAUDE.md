@@ -13,44 +13,93 @@ fireworks at the top. Nothing is ever killed: creatures are scared off or charme
 Look: clean low-poly toon. Chunky shapes, flat colours, cel shading, dark post-process outlines, saturated palette,
 golden afternoon at the base turning to sunset at the top. A "retro mode" toggle renders at low resolution.
 
+Other level themes that were considered are in `docs/IDEAS.md`.
+
 ## Stack and commands
 
-- three.js (WebGL renderer) + three-mesh-bvh, bundled by Vite into a static site (`dist/`, relative base) for GitHub Pages.
-- `npm run dev` (port 5173), `npm run build`, `npm test` (Playwright bot run).
+- three.js (WebGL renderer) + three-mesh-bvh, bundled by Vite into a static site (`dist/`, relative base) for GitHub Pages
+  (`.github/workflows/pages.yml`).
+- `npm run dev` (port 5173), `npm run build`.
+- `npm test`: a bot plays the whole stage in headless Chromium (see Testing). `npm run test:touch`: touch controls.
 - Models are built by Blender Python scripts in `blender/` (Blender 5.2, headless) and exported as GLB to `public/assets/`:
   `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/<script>.py`
+  Each script also renders previews to `blender/previews/` (not committed): look at them after changing a model.
 - Audio is synthesized with Web Audio. There are no audio files and no textures.
 
 ## Layout
 
 ```
 index.html              canvas + UI root
-src/main.js             boot and main loop (fixed 60 Hz update, interpolated render)
-src/game.js             game state machine (loading, title, play, pause, claim, results)
-src/core/               renderer + post FX, toon materials, asset loading, input, settings
-src/world/              collision, player controller, camera, level, level data, movers, entities, sky
-src/fx/                 particles, fireworks
-src/audio/              adaptive music, sound effects, meow synth
-src/ui/                 HTML/CSS overlay: HUD, screens, touch controls
+src/main.js             boot and the frame loop
+src/game.js             the Game: scene, lights, state machine (loading, title, play, pause, claim, results),
+                        hooks the entities call (hurt, collect, setCheckpoint, hint), HUD and audio driving
+src/debug.js            window.indy test hooks
+src/core/               renderer.js (passes), assets.js (GLB loading, toon materials, batching), input.js, settings.js, layers.js
+src/world/              collision.js, player.js, indyModel.js, camera.js, level.js (builder), leveldata.js (the stage),
+                        movers.js, entities.js, sky.js
+src/fx/                 particles.js, fireworks.js, pool.js
+src/audio/              index.js (API), music.js, songs.js, synth.js, sfx.js, voice.js, ambience.js, graph.js, theory.js
+src/ui/                 index.js (API), ui.css, touch.js, icons.js
 blender/lib/indykit.py  shared Blender helpers and the colour PALETTE
-blender/*.py            one script per GLB
-blender/ASSETS.md       the exact spec of every model (names, sizes, origins)
-blender/previews/       preview renders (not shipped)
+blender/*.py            one script per GLB: indy, tower, kit_rides, kit_festival, creatures, items, environment
+blender/ASSETS.md       the spec of every model (names, sizes, origins) that the game code relies on
 public/assets/*.glb     exported models
-tools/*.html            dev sandboxes (not part of the build)
-tests/                  Playwright scripts
+tools/                  dev sandboxes (audio.html, ui.html, fx.html) and montage.mjs (contact sheets of images)
+tests/                  run.mjs + bot.js + route.js (the playthrough), touch-check.mjs, and the subagents' checks
 ```
 
 ## World conventions
 
-- three.js coordinates: Y up, metres-ish ("units"). The tower axis is the Y axis through the origin. Ground is y = 0.
-- Cylindrical placement: angle θ in degrees, radius r, height y → position `(r·sin θ, y, r·cos θ)`.
-  An object placed with `rotation.y = θ` has its local +Z pointing outward (away from the tower, toward the camera)
+- three.js coordinates: Y up, 1 unit ≈ 1 m. The tower axis is the Y axis through the origin. Ground is y = 0.
+- Cylindrical placement: angle θ in degrees, radius r, height y → position `(r·sin θ, y, r·cos θ)` (`cyl()` in movers.js).
+  An object placed with `placeCyl` has its local +Z pointing outward (away from the tower, toward the camera)
   and local +X pointing along increasing θ. The camera always sits outside the player looking inward at the tower,
-  so increasing θ is "right" on screen.
-- Scale: Indy is about 1.0 tall (ear tips) and 1.2 long. The game tower is 140 units tall and the HUD shows
-  altitude = y × 1.2 m (168 m at the tip). Shaft radius ≈ 5, pod radius ≈ 15.
-- Game logic runs at a fixed 60 Hz. Movers are pure functions of time.
+  so increasing θ is "right" on screen. θ = 0 is south (the pavilion entrance), θ = 180 is the quay to the north.
+- Scale: Indy is about 1.0 tall and 1.2 long, jumps about 2.55 high and about 4.4 far (more with a pounce).
+  The game tower is 140 units tall and the HUD shows altitude = y × 1.2 m (168 m at the tip). Shaft radius ≈ 5, pod ≈ 16.
+- Game logic runs at a fixed 60 Hz (`Game.fixed`). Movers are pure functions of game time.
+
+## Architecture notes
+
+- **Rendering** (`core/renderer.js`): scene to a half-float target with a depth texture; a second pass of view normals
+  of layer 0 only (`scene.overrideMaterial`); an ink pass that finds edges in depth and normals; bloom; a final pass
+  that encodes sRGB and, in retro mode, dithers. Things that must not get ink (sky, particles, glows, far scenery)
+  are on `LAYER_NO_OUTLINE`. Retro mode renders at 288 lines and lets CSS scale the canvas with `image-rendering: pixelated`.
+- **Materials and batching** (`core/assets.js`): every GLB material becomes a toon material by name (`glow_*` unlit and
+  brightened at dusk via `assets.setGlow`, `glass_*` transparent, `tint_*` recoloured per instance). To keep draw calls
+  low, flat colours are baked into vertex colours so almost everything shares `assets.vcToon` / `assets.vcGlow`, and
+  `Level._mergeStatic` bakes all static level geometry (kit pieces, tower, landscape) into one mesh per material.
+  Anything that must stay a separate object is marked `userData.noMerge` (spinners, checkpoints, the beacon bars).
+- **Collision** (`world/collision.js`): triangle meshes in BVHs: one merged static collider plus one per mover. Collision
+  geometry comes from `COL_*` helper meshes in the GLBs and from the level builder's procedural pieces. Queries are a
+  sphere push-out and downward ray casts. Climbables are analytic: planes (from `CLIMB_*` quads) and poles.
+- **Player** (`world/player.js`): states `ground`, `air`, `climb`. On the ground Indy follows the floor with a
+  five-ray probe (so small gaps and steps up to 0.24 are walkable) and a floating sphere handles walls. Movement is in
+  the tower's frame: stick right = tangent, stick up = toward the axis (near the axis it blends to the camera's frame).
+  Hopping over the top of a climb (`vault`) is committed for 0.34 s. `TUNE` at the top of the file has every number.
+- **Movers** (`world/movers.js`): motion functions `(t, object)`; `Level.mover()` wraps a kit piece, registers its
+  collider and climbables in the mover's local space, and the player is carried by `mover.delta`.
+- **Level** (`world/leveldata.js`): the stage as code, one function per section, using the builder in `level.js`
+  (`piece`, `mover`, `arcDeck`, `box`, `cable`, `treat`, `checkpoint`, `gull`, `wind`, `sparkler`, `hint`, …).
+  Checkpoint order matters: `tests/route.js` refers to checkpoints by index.
+- **Entities** (`world/entities.js`): each has `update(dt, t, player)` and optionally `onMeow(pos)` and `reset()`.
+  They talk to the game through `ctx.game` (`hurt`, `collect`, `setCheckpoint`, `hint`, `tension`, `playing`).
+  Give an entity a `type` string if a test needs to find it (class names are minified in the build).
+- **Camera** (`world/camera.js`): follows Indy's angle around the tower with a little lead; `mode` is `follow`,
+  `orbit` (claim) or `title`.
+- **Audio** (`audio/index.js` header) and **UI** (`ui/index.js` header) document their own APIs. The game calls audio
+  through a proxy that logs and swallows exceptions, so sound can never stop the game.
+  Frame order: `input.poll()` → game logic → `ui.tick()`. The UI handles the M and R keys and the pause menu itself.
+
+## Testing
+
+- `node tests/run.mjs` plays the stage with the bot: `--each` (every section alone from its checkpoint), `--only=name`,
+  `--god`, `--shots`, `--url=http://127.0.0.1:5173/` (use a running dev server), `--eval=file.js` (run a snippet with
+  `window.bot` and `window.indy` after booting, for debugging). The route is `tests/route.js`.
+  After changing the level layout or `player.js`, run it; if a section fails, `--each` shows which one.
+- `window.indy` (src/debug.js): `start()`, `manual(true)` + `step(n, input)`, `tp(a, r, y)`, `cp(i)`, `god(true)`, `info()`.
+- The Playwright MCP browser is good for looking at the game: load the dev server, call `indy.start()`, teleport with
+  `indy.cp(i)`, take screenshots. `node tools/montage.mjs out.png <cols> a.png b.png …` tiles screenshots into one image.
 
 ## Asset contract (Blender → game)
 
@@ -58,39 +107,13 @@ tests/                  Playwright scripts
   So in Blender: front of a thing faces −Y, and for pieces mounted on the tower the tower is on the +Y side.
 - Flat colours only. One Principled material per colour, created with `indykit.mat(name)` from `PALETTE`
   (or `mat(name, '#hex')` for a one-off). No image textures, no vertex colours.
-  The game turns materials into toon materials by name: `glow_*` → unlit emissive (blooms at dusk),
-  `glass_*` → transparent, `tint_*` → recoloured per instance from level data.
 - Shading via `indykit.shade(obj, angle)`. Outlines are a post-process, so do not model outline hulls.
-- Helper objects, exported but hidden in game: `COL_*` collision-only meshes (simple boxes/cylinders, closed),
+- Helper objects, exported but hidden in game: `COL_*` collision-only meshes (simple, closed),
   `CLIMB_*` climbable flat quads (front = the side Indy climbs on), `CLIMBPOLE_*` climbable vertical poles/ropes.
   Visible meshes do not collide unless they have a `COL_` sibling.
-- A kit file holds many pieces. Each piece is one root object (an empty or a mesh) with a unique name, and everything
-  that belongs to it is parented under it. Root positions may be spread out for preview renders: the game resets each
-  root to the origin, so a piece's geometry is defined relative to its root.
-- Named child empties are attachment or pivot points that the game animates (for example `wing_L`).
-  The game does all motion in code, so kit files have no baked animations (only `indy.glb` has skeletal animations).
-
-## Module contracts
-
-`src/core/layers.js`: `LAYER_DEFAULT = 0`, `LAYER_NO_OUTLINE = 1`. Sky, particles, glows and anything transparent that
-must not get an ink outline goes on layer 1 only (`obj.layers.set(LAYER_NO_OUTLINE)`).
-
-`src/core/input.js` (`input` singleton): `init()`, `poll()` once per frame, fields `moveX`, `moveY` (−1..1, up = +1),
-`jump`, `meow` (held), `pressed(action)` for edges (`jump`, `meow`, `pause`, `confirm`, `back`, `up`, `down`, `left`,
-`right`, `mute`, `retro`), `lastDevice` (`'keyboard' | 'gamepad' | 'touch'`), `setVirtual({moveX, moveY, jump, meow})`
-and `virtualPress(action)` for touch controls, `glyph(action)` for on-screen key names.
-
-`src/core/settings.js` (`settings` singleton): `get(key)`, `set(key, value)`, `on(fn)`; keys `retro`, `muted`,
-`musicVolume`, `sfxVolume`. Persisted in localStorage.
-
-`src/audio/index.js` (`audio` singleton): see the header comment of that file.
-`src/ui/index.js` (`ui` singleton): see the header comment of that file.
-`src/fx/particles.js`, `src/fx/fireworks.js`, `src/world/sky.js`: see their header comments.
-
-## Rules for parallel work
-
-- Stay inside the files you were assigned. Do not run `npm install`, do not edit `package.json`, do not commit.
-- Dev sandboxes go in `tools/` and use their own Vite port (`npx vite --port <yours> --strictPort`).
-- For browser checks write a Node script with the `playwright` package (already installed, Chromium is cached;
-  launch with `args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist']` for WebGL).
-  The Playwright MCP browser is reserved for the lead session.
+- A kit file holds many pieces. Each piece is one root object with a unique name, and everything that belongs to it
+  is parented under it. The game resets each root to the origin.
+- Parts the game animates are separate child objects with a custom property `part` (for example `wing_L`, `head`,
+  `flag`, `emit`): look them up with `assets.part(obj, 'wing_L')`. Blender object names are global, so children are
+  named `<piece>_<part>`. Kit files have no baked animations; only `indy.glb` has skeletal animations
+  (`idle`, `walk`, `run`, `jump`, `fall`, `land`, `pounce`, `climb`, `hurt`, `sit`).

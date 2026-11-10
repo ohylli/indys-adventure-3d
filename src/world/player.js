@@ -73,6 +73,7 @@ export class Player {
     this.pos.copy(p); this.prevPos.copy(p); this.vel.set(0, 0, 0);
     this.state = 'air'; this.ground = null; this.climb = null; this.yaw = yaw;
     this.lastGroundY = p.y; this.coyote = 0; this.buffer = 0; this.canPounce = true; this.pouncing = false;
+    this.airTime = 0; this.regrab = 0.3; this.vaultT = 0; this.noCut = false; this.hoppedOff = null;
   }
 
   get radial() { return Math.hypot(this.pos.x, this.pos.z); }

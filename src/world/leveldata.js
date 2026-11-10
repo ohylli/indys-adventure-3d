@@ -42,7 +42,7 @@ export function buildLevel(L) {
 
 // ---------------------------------------------------------------------------------------------------- 0 plaza
 function plaza(L) {
-  L.checkpoint(0, 27.5, 0, 0);
+  L.checkpoint(-7, 20.5, 0, 0);
   L.treatLine([0, 22, 0], [0, 16.5, 0], 4);
   L.hint((p) => p.pos.y < 2 && p.radial > 14 && Math.abs(p.angle) < 0.5, 'Run with {move}. Jump with {jump}.');
 
@@ -270,9 +270,10 @@ function restaurant(L) {
   L.sparkler(262, 13.6, 99.5, { phase: 1.2 });
   L.sparkler(280, 14.4, 99.5, { phase: 2.4 });
   for (let a = 212; a < 300; a += 9) if (![244, 262, 280].some((s) => Math.abs(s - a) < 4)) L.treat(a, 14.1, 99.5);
-  L.heart(304, 14.1, 99.5);
+  L.heart(310, 14.1, 99.5);
+  L.checkpoint(297, 14.0, 99.5, 7);
   // ropes hang from the revolving brim above: ride one up
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const g = new THREE.Group();
     const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 4.7, 8), L.mat('rope'));
     rope.position.y = -2.35; rope.castShadow = true;
@@ -281,7 +282,7 @@ function restaurant(L) {
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 1.5), L.mat('steel_dark'));
     arm.position.set(0, 0.05, -0.65);
     g.add(rope, knot, arm);
-    const m = L.mover(g, orbit({ a0: i * 120, r: 17.45, y: REST.y + 0.45, speed: REST.speed }));
+    const m = L.mover(g, orbit({ a0: i * 90, r: 17.45, y: REST.y + 0.45, speed: REST.speed }));
     L.world.addClimbPole(0, 0, -4.7, 0, 0.1, m);
   }
   L.hint((p) => Math.abs(p.pos.y - 99.5) < 0.6 && p.radial > 12 && Math.abs(((p.angle / DEG + 360) % 360) - 290) < 25, 'The restaurant above revolves. Leap out and grab a rope as it comes by.');

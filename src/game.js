@@ -129,6 +129,8 @@ export class Game {
       for (const top of env.scene.children) {
         if (/far|lake|city|hill|shore|island|water/i.test(top.name)) top.traverse((o) => { if (o.isMesh) { o.layers.set(LAYER_NO_OUTLINE); o.receiveShadow = false; } });
       }
+      const hedge = env.scene.getObjectByName('hedge');
+      if (hedge) hedge.scale.y = 0.55;        // kept low: the camera looks over it
       this.clouds = env.scene.getObjectByName('clouds');
       if (this.clouds) {
         this.clouds.removeFromParent();
@@ -168,7 +170,8 @@ export class Game {
       this.state = 'title';
       this.level.reset(); this._resetRun();
       this._placeAtSpawn();
-      this.player.yaw = (this.level.spawn.a + 20) * DEG;
+      this.player.teleport(cyl(this.level.spawn.a + 0.3, this.level.spawn.r + 1.9, this.level.spawn.y), 0);
+      this.renderPos.copy(this.player.pos);
       this.player.frozen = true;
       this.indy.forced = 'sit'; this.indy.hat(true);
       this.cam.mode = 'title';
@@ -249,7 +252,7 @@ export class Game {
     if (this.hearts < this.maxHearts) this.hearts++;
   }
 
-  /** Something hurt Indy. opts: { sfx, force, out, up } */
+  /** Something hurt Indy. opts: { sfx, force, out, up, dir (knock-back direction; default: away from source) } */
   hurt(source, opts = {}) {
     if (this.god || (this.invuln > 0 && !opts.force) || !this.playing) return;
     const p = this.player;
@@ -257,6 +260,7 @@ export class Game {
     this.invuln = 1.7;
     _v.set(p.pos.x - source.x, 0, p.pos.z - source.z);
     if (_v.lengthSq() < 0.01) _v.set(p.pos.x, 0, p.pos.z);
+    if (opts.dir) _v.copy(opts.dir);
     _v.normalize();
     p.state = 'air'; p.climb = null; p.ground = null; p.regrab = 0.5; p.pouncing = false; p.noCut = true; p.vaultT = 0;
     p.vel.set(_v.x * (opts.out ?? 5.5), opts.up ?? 8, _v.z * (opts.out ?? 5.5));
@@ -356,7 +360,8 @@ export class Game {
       else if (ev === 'grab') audio.sfx('climb');
       else if (ev === 'vault') { audio.sfx('vault'); this.indy.jumpPulse(); }
       else if (ev === 'fell' && this.state === 'play' && !this.respawn) {
-        audio.sfx('fall');
+        if (p.pos.y < -4) { audio.sfx('splash'); P.burst('splash', _v.set(p.pos.x, -5.8, p.pos.z), { count: 22, scale: 1.6 }); }
+        else audio.sfx('fall');
         const low = (this.checkpoint ? this.checkpoint.pos.y : 0) < 3 && p.pos.y < 3;
         if (!low && !this.god) { this.hearts--; audio.meow('hurt'); }
         this._startRespawn(this.hearts <= 0);
@@ -415,7 +420,7 @@ export class Game {
     ui.show('claim', { text: 'NÄSINNEULA CLAIMED!' });
     audio.setMusic('claim'); audio.meow('happy');
     setTimeout(() => audio.meow('purr'), 1600);
-    this.cam.startOrbit({ angle: this.cam.angle, speed: 0.16, radius: 7.5, height: TOP_Y + 2.2, target: new THREE.Vector3(0, TOP_Y + 0.5, 0) });
+    this.cam.startOrbit({ angle: this.cam.angle, speed: 0.16, radius: 5.2, height: TOP_Y + 1.7, target: new THREE.Vector3(0, TOP_Y + 0.55, 0) });
     this._setBeacon('#ff7ac0');
     this.particles.burst('star', _v.set(0, TOP_Y + 1, 0), { count: 24 });
     this.particles.burst('confetti', _v.set(0, TOP_Y + 2.5, 0), { count: 60 });
@@ -449,15 +454,17 @@ export class Game {
     // camera
     if (this.cam.mode === 'title') {
       const s = this.level.spawn, t = performance.now() / 1000;
-      const a = s.a - 9 + Math.sin(t * 0.21) * 2.5;
-      cyl(a, s.r + 5.4 + Math.sin(t * 0.17) * 0.4, 0.75 + Math.sin(t * 0.13) * 0.2, this.camera.position);
-      this.camera.lookAt(_v.set(0, 17, 0).lerp(p.pos, 0.3));
+      const a = s.a - 3.5 + Math.sin(t * 0.21) * 1.2;
+      cyl(a, s.r + 5.6 + Math.sin(t * 0.17) * 0.3, 0.62 + Math.sin(t * 0.13) * 0.12, this.camera.position);
+      this.camera.lookAt(_v.set(0, 10.5, 0).lerp(p.pos, 0.52));
+      p.yaw = Math.atan2(this.camera.position.x - p.pos.x, this.camera.position.z - p.pos.z) + (this.titleTurn ?? -0.35);
       this.cam.angle = a * DEG;
     } else if (!paused) {
       if (this.state === 'claim' || this.state === 'results') {
         const o = this.cam.orbit;
-        o.radius += (30 - o.radius) * Math.min(1, dt * 0.22);
-        o.height += (TOP_Y + 7 - o.height) * Math.min(1, dt * 0.22);
+        const k = Math.min(1, dt * (this.claimT < 2.5 ? 0.02 : 0.2));
+        o.radius += (30 - o.radius) * k;
+        o.height += (TOP_Y + 7 - o.height) * k;
       }
       this.cam.update(dt, p, this.renderPos);
     }

@@ -60,10 +60,10 @@
 // ui.setDevice(d) (force it; sandbox/tests), ui.touch.state (virtual stick/button state, read-only, for tests),
 // ui.emit(event) (used internally).
 
-import '@fontsource/fredoka/500.css';
-import '@fontsource/fredoka/600.css';
-import '@fontsource/fredoka/700.css';
-import '@fontsource/lilita-one/400.css';
+import '@fontsource/fredoka/latin-500.css';
+import '@fontsource/fredoka/latin-600.css';
+import '@fontsource/fredoka/latin-700.css';
+import '@fontsource/lilita-one/latin-400.css';
 import './ui.css';
 import { input } from '../core/input.js';
 import { settings } from '../core/settings.js';

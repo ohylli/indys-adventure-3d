@@ -71,7 +71,7 @@ void main() {
   c = mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
   if (uRetro > 0.5) {
     float levels = 20.0;
-    c = floor(c * levels + 0.5 + bayer(vUv * uSize) * 0.9) / levels;
+    c = floor(c * levels + 0.5 + bayer(vUv * uSize) * 0.65) / levels;
   }
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
@@ -139,7 +139,7 @@ export class Renderer {
     this.canvas.style.height = '100%';
 
     if (this.targets) for (const t of Object.values(this.targets)) t.dispose();
-    const samples = this.retro ? 0 : 4;
+    const samples = this.retro || this.quality < 0.8 ? 0 : 4;      // no MSAA on machines that are struggling
     const color = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples, depthBuffer: true });
     color.depthTexture = new THREE.DepthTexture(w, h);
     color.depthTexture.type = THREE.UnsignedIntType;
@@ -151,6 +151,7 @@ export class Renderer {
     const u = this.outline.material.uniforms;
     u.uTexel.value.set(1 / w, 1 / h);
     u.uThickness.value = this.retro ? 1 : Math.max(1, h / 800);
+    u.uStrength.value = this.retro ? 0.62 : 0.9;
     this.final.material.uniforms.uSize.value.set(w, h);
     this.final.material.uniforms.uRetro.value = this.retro ? 1 : 0;
   }

@@ -24,6 +24,9 @@ export class Mover {
     this.matrix.copy(this.object.matrix);
     this.invMatrix.copy(this.matrix).invert();
     this.delta.copy(this.matrix).multiply(_m.copy(this.prevMatrix).invert());
+    // a mover that jumps (a coaster car wrapping round to the top of the track) must not fling its rider along
+    const e = this.matrix.elements, p = this.prevMatrix.elements;
+    if (Math.abs(e[12] - p[12]) + Math.abs(e[13] - p[13]) + Math.abs(e[14] - p[14]) > 4) this.delta.identity();
   }
 
   /** Move a world-space point along with the mover's motion over the last update. */

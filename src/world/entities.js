@@ -381,6 +381,7 @@ export class BounceZone {
 export class Wind {
   constructor(ctx, opts) {
     this.ctx = ctx; this.o = { period: 6, blow: 2.4, strength: 15, phase: 0, warn: 0.9, tangent: 0, ...opts };
+    this.type = 'wind';
     this.stream = null; this.blowing = false; this.level = 0;
   }
   inside(player, margin = 0) {
@@ -421,6 +422,7 @@ export class Wind {
 export class Sparkler {
   constructor(ctx, a, r, y, opts = {}) {
     this.ctx = ctx; this.o = { on: 1.5, off: 2.1, phase: 0, ...opts };
+    this.type = 'sparkler';
     this.object = assets.kit('firework_fountain');
     placeCyl(this.object, a, r, y ?? 0);
     this.object.scale.setScalar(1.5);
@@ -484,8 +486,10 @@ export class Bumper {
     if (Math.abs(d.x) < this.half.x && Math.abs(d.y) < this.half.y && Math.abs(d.z) < this.half.z && this.cool <= 0) {
       if (player.ground && player.ground.mover === m) return;      // riding on top is fine
       this.cool = 0.8;
+      // knocked toward the tower wall, out of the car's lane, so it rolls on past
+      const rr = Math.hypot(player.pos.x, player.pos.z) || 1;
       _w.setFromMatrixPosition(m.matrix);
-      this.ctx.game.hurt(_w, { sfx: 'honk', out: 8, up: 9 });
+      this.ctx.game.hurt(_w, { sfx: 'honk', out: 5.2, up: 8.5, dir: _s.set(-player.pos.x / rr, 0, -player.pos.z / rr) });
     }
   }
 }

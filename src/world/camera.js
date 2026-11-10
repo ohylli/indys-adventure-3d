@@ -24,7 +24,7 @@ export class TowerCamera {
     const aspect = innerWidth / Math.max(1, innerHeight);
     this.camera.aspect = aspect;
     // keep a comfortable horizontal view on tall phone screens
-    this.portrait = aspect < 1 ? Math.min(1.45, 1 / aspect) : 1;
+    this.portrait = aspect < 1 ? Math.min(1.25, 1 / aspect) : 1;
     this.camera.fov = aspect < 1 ? 62 : 50;
     this.camera.updateProjectionMatrix();
   }
@@ -41,8 +41,10 @@ export class TowerCamera {
   _want(player, pos = player.pos) {
     const r = Math.hypot(pos.x, pos.z);
     const dist = (11.5 + Math.min(4, r * 0.06)) * this.portrait * this.zoom;
-    const radius = Math.max(r + dist, 15);
-    const height = pos.y + 3.3 + Math.min(2.2, pos.y * 0.012);
+    let radius = Math.max(r + dist, 15);
+    let height = pos.y + 3.3 + Math.min(2.2, pos.y * 0.012);
+    // out on the plaza the camera rides a little higher, so the hedge behind Indy stays below the frame
+    if (pos.y < 8) height += 1.3 * THREE.MathUtils.smoothstep(r, 15, 25) * (1 - THREE.MathUtils.smoothstep(pos.y, 3, 8));
     // look at Indy, pulled slightly toward the tower so it stays in frame
     _t.set(pos.x * 0.9, pos.y + 1.15, pos.z * 0.9);
     return { radius, height, look: _t };

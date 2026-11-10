@@ -3,8 +3,8 @@
 (() => {
   const b = window.bot;
   const { A, R, Y, P, G, norm } = b;
-  const ent = (name) => G().level.entities.filter((e) => e.constructor.name === name);
-  const windCalm = () => ent('Wind').every((w) => w.level < 0.05 && !w.warned && !w.blowing);
+  const ent = (type) => G().level.entities.filter((e) => e.type === type);     // (class names do not survive the build)
+  const windCalm = () => ent('wind').every((w) => w.level < 0.05 && !w.warned && !w.blowing);
 
   window.route = [
     {
@@ -141,7 +141,7 @@
         b.walk(216, 14.1, { meow: true });
         b.hold({ meow: true }, 30);
         b.walk(236, 14.2, { meow: true });
-        const sparks = ent('Sparkler');
+        const sparks = ent('sparkler');
         for (const a of [244, 262, 280]) {
           const s = sparks.find((e) => Math.abs(norm(Math.atan2(e.pos.x, e.pos.z) * 180 / Math.PI - a)) < 2 && e.pos.y < 105);
           b.walk(a - 5, 14.0);
@@ -167,7 +167,7 @@
       },
     },
     {
-      name: 'needle', cp: 9,
+      name: 'needle', cp: 10,
       run() {
         b.autoMeow = true;
         const a0 = Math.round(A());
