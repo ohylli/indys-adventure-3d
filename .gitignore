@@ -1,0 +1,8 @@
+node_modules/
+dist/
+blender/previews/
+tests/out/
+.playwright-mcp/
+*.blend1
+__pycache__/
+.DS_Store

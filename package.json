@@ -1,0 +1,27 @@
+{
+  "name": "indys-adventure-3d",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "assets": "node tools/build-assets.mjs",
+    "test": "node tests/run.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Indy climbs the Nasinneula to claim it. A 3D platformer.",
+  "dependencies": {
+    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource/lilita-one": "^5.3.0",
+    "three": "^0.187.0",
+    "three-mesh-bvh": "^0.9.18"
+  },
+  "devDependencies": {
+    "playwright": "1.54",
+    "vite": "^8.3.7"
+  },
+  "private": true,
+  "type": "module"
+}

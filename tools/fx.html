@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FX sandbox</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font: 12px/1.35 system-ui, sans-serif; }
+  canvas { display: block; }
+  #panel { position: fixed; top: 8px; left: 8px; width: 250px; max-height: calc(100% - 16px); overflow: auto;
+    background: rgba(20, 22, 34, 0.82); color: #eee; padding: 8px 10px; border-radius: 8px; }
+  #panel h3 { margin: 8px 0 4px; font-size: 12px; color: #ffd36b; }
+  #panel button { margin: 2px 2px 0 0; padding: 2px 6px; font-size: 11px; border: 0; border-radius: 4px;
+    background: #3b4266; color: #fff; cursor: pointer; }
+  #panel button.on { background: #c2477a; }
+  #panel input[type=range] { width: 100%; }
+  #stats { white-space: pre; color: #9fd; margin-top: 6px; }
+  body.clean #panel { display: none; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h3>Sky time <span id="tval">0.00</span></h3>
+  <input id="time" type="range" min="0" max="1" step="0.005" value="0">
+  <div><button data-view="sunward">look NW (sun)</button><button data-view="away">look SE</button>
+    <button data-view="particles">particles</button><button data-view="close">close</button><button data-view="fireworks">fireworks</button></div>
+  <div><button id="orbit">orbit</button><button id="flash">sky flash</button></div>
+  <h3>Particles</h3>
+  <div id="ptypes"></div>
+  <div><button id="wind">wind stream</button><button id="fountain">spark fountain</button></div>
+  <h3>Fireworks</h3>
+  <div id="fstyles"></div>
+  <div><button id="show">show</button></div>
+  <div id="stats"></div>
+</div>
+<script type="module" src="./fx.js"></script>
+</body>
+</html>
