@@ -473,7 +473,8 @@ export class Bumper {
   constructor(ctx, mover, opts = {}) {
     this.ctx = ctx; this.mover = mover; this.cool = 0; this.honk = 0;
     // long enough to catch Indy when the car's nose is pushing him along (car 1.1 + cat 0.4 from its centre)
-    this.half = opts.half || new THREE.Vector3(1.7, 0.75, 0.9);
+    // Narrower than the car itself: grazing its side only pushes Indy aside.
+    this.half = opts.half || new THREE.Vector3(1.7, 0.75, 0.72);
     this.centre = opts.centre || new THREE.Vector3(0, 0.55, 0);
   }
   update(dt, t, player) {

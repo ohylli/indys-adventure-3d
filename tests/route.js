@@ -47,7 +47,7 @@
       run() {
         b.walk(186, 8.8);
         // run up the outer lane; the cars keep to the middle
-        for (const a of [230, 280, 330, 20, 70, 120, 170, 220, 262]) b.walk(a, 8.82, { tol: 0.6 });
+        for (const a of [230, 280, 330, 20, 70, 120, 170, 220, 262]) b.walk(a, 8.9, { tol: 0.45 });
         b.walk(285, 8.4);
         b.expect(Math.abs(Y() - 37) < 0.3, 'to be at the top station');
         b.walk(305.5, 8.3);
