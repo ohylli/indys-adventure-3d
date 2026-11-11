@@ -6,3 +6,4 @@ tests/out/
 *.blend1
 __pycache__/
 .DS_Store
+CLAUDE.local.md

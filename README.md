@@ -80,10 +80,11 @@ Indy is modelled from photos of the real cat: the white long-haired coat, the da
 the dark patches on his back, the big bushy tail, green eyes and a pink nose. On the title screen he wears a
 fedora, because his name is Indiana.
 
-To rebuild a model after editing its script:
+To rebuild a model after editing its script (Blender 5.2; use the full path to the executable if `blender`
+is not on your PATH):
 
 ```sh
-"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/indy.py
+blender --background --python blender/indy.py
 ```
 
 ## How it was verified

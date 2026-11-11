@@ -4,7 +4,8 @@ Guidance for Claude Code when working in this repository.
 
 ## Overview
 
-**Indy's Adventure 3D: Näsinneula** is a browser 3D platformer and the sequel to `../indys-adventure` (2D pixel art).
+**Indy's Adventure 3D: Näsinneula** is a browser 3D platformer and the sequel to Indy's Adventure (2D pixel art;
+where its checkout lives on this machine, if anywhere, is in `CLAUDE.local.md`).
 Indy, a real fluffy white cat with a dark tabby cap and a big dark tail, climbs the outside of the Näsinneula
 observation tower in Tampere "to claim it" (the tallest cat tree in Finland). It is one continuous stage on a festival
 night at the Särkänniemi amusement park: rides on the lower half of the tower, festival decorations higher up,
@@ -22,7 +23,7 @@ Other level themes that were considered are in `docs/IDEAS.md`.
 - `npm run dev` (port 5173), `npm run build`.
 - `npm test`: a bot plays the whole stage in headless Chromium (see Testing). `npm run test:touch`: touch controls.
 - Models are built by Blender Python scripts in `blender/` (Blender 5.2, headless) and exported as GLB to `public/assets/`:
-  `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --python blender/<script>.py`
+  `blender --background --python blender/<script>.py` (the Blender executable's path on this machine is in `CLAUDE.local.md`)
   Each script also renders previews to `blender/previews/` (not committed): look at them after changing a model.
 - Audio is synthesized with Web Audio. There are no audio files and no textures.
 
