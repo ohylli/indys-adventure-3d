@@ -20,14 +20,14 @@
 //                                  screen, with a toast. The game applies them by listening to settings.on().
 //   ui.show(screen, data?)         'loading' | 'title' | 'play' | 'pause' | 'claim' | 'results' | 'none'
 //                                    loading: data = { progress: 0..1 }; call again to update the bar
-//                                    title:   logo "Indy's Adventure 3D" + subtitle "Näsinneula", Start,
+//                                    title:   logo "Indy's Adventure 3D" + subtitle "Näsinneula" + the tagline, Start,
 //                                             Retro mode on/off, Sound on/off, a controls panel
 //                                             (the 3D scene keeps rendering behind it, so keep it airy)
 //                                    play:    HUD only
 //                                    pause:   Resume, Restart, Retro mode, Sound, Quit to title + controls reminder
 //                                             (also shows altitude / treats / time from the last ui.update)
 //                                    claim:   hides the HUD (cinematic letterbox); shows data.text as a big caption
-//                                             if given (call again with new text to change it)
+//                                             and data.sub as a smaller line under it, if given (call again to change)
 //                                    results: data = { treats, treatsTotal, timeSec, naps, charm (bool), rank ('S'|'A'|'B'|'C') }
 //                                             with Play again ('restart') / Title ('quit') buttons
 //   ui.screen                      current screen name
@@ -444,7 +444,7 @@ function build() {
   const toggleBtn = (key, icon, label) =>
     `<button class="btn btn-toggle" type="button" data-nav data-toggle="${key}" aria-pressed="false">${icon}<span>${label}</span><span class="sw" aria-hidden="true"></span></button>`;
   const title = h(`<section class="scr scr-title" aria-label="Title">
-    <div class="title-logo">${logoHTML()}</div>
+    <div class="title-logo">${logoHTML()}<div class="title-tag display"><span class="ol">Climb the tallest cat tree in Finland!</span></div></div>
     <div class="title-bottom">
       <div class="title-left">
         <div class="title-prompt"></div>
@@ -616,7 +616,7 @@ export const ui = {
       $.loadTxt.innerHTML = `Loading<b>${Math.round(p * 100)}%</b>`;
       $.loadTxt.setAttribute('aria-valuenow', Math.round(p * 100));
     }
-    if (screen === 'claim' && data && 'text' in data) setClaimText(data.text);
+    if (screen === 'claim' && data && 'text' in data) setClaimText(data.text, data.sub);
     if (screen === prev) {
       if (screen === 'results') runResults(data);
       return;
@@ -768,11 +768,11 @@ export const ui = {
   },
 };
 
-function setClaimText(text) {
+function setClaimText(text, sub) {
   const el = $.claimCap;
   if (!el) return;
   if (!text) { el.classList.remove('show'); el.innerHTML = ''; return; }
-  el.innerHTML = `<span class="ol">${esc(text)}</span>`;
+  el.innerHTML = `<span class="ol">${esc(text)}</span>${sub ? `<span class="claim-sub ol">${esc(sub)}</span>` : ''}`;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
 }
 

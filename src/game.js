@@ -417,7 +417,7 @@ export class Game {
     p.yaw = this.cam.angle;
     this.indy.forced = 'sit';
     ui.hint(null);
-    ui.show('claim', { text: 'NÄSINNEULA CLAIMED!' });
+    ui.show('claim', { text: 'NÄSINNEULA CLAIMED!', sub: "The tallest cat tree in Finland is Indy's now." });
     audio.setMusic('claim'); audio.meow('happy');
     setTimeout(() => audio.meow('purr'), 1600);
     this.cam.startOrbit({ angle: this.cam.angle, speed: 0.16, radius: 5.2, height: TOP_Y + 1.7, target: new THREE.Vector3(0, TOP_Y + 0.55, 0) });
