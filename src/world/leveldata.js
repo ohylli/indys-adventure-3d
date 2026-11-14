@@ -181,7 +181,9 @@ function dropAndNets(L) {
   L.treatLine([277, 8.3, 43], [277, 8.3, 46], 3);
   L.treatLine([291, 8.3, 48], [291, 8.3, 51], 3);
   L.treat(284, 7.6, 42); L.treat(284, 7.8, 47);
-  L.jackdaw(281, 6.3, 47, { yaw: 40 });
+  // out front on the small deck below the second net: in plain view while climbing the first net, and not behind
+  // Indy or the second net (which hangs in front of the big deck)
+  L.jackdaw(289, 9.3, 47, { yaw: -70 });
   // top landing
   L.arcDeck(333.4, 341, 5.3, 8.9, y1, y1);       // as wide as the car, so stepping off is safe
   L.arcDeck(341, 400, 5.3, 7.1, y1, y1);

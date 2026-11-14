@@ -259,7 +259,7 @@ def build_jackdaw():
     P = 'jackdaw'
     root = empty(P)
     K, G = 'jackdaw_black', 'jackdaw_grey'
-    WG = mat('jackdaw_wing', '#3f4252').name
+    WG = mat('jackdaw_wing', '#474c61').name
     b = [
         ell('b', (0.125, 0.19, 0.13), (0, 0.03, 0.235), K, rot=(-30, 0, 0), segs=16, rings=10, axis='y'),
         ell('tail', (0.07, 0.12, 0.024), (0, 0.175, 0.15), WG, rot=(-22, 0, 0), segs=10, rings=6, axis='y'),
@@ -271,7 +271,8 @@ def build_jackdaw():
 
     hc = Vector((0, -0.105, 0.405))
     hd = ell('head', (0.108, 0.112, 0.105), hc, K, rot=(-27, 0, 0), segs=16, rings=10, axis='y')
-    paint(hd, G, lambda c: c.y > -0.04)
+    # silver-grey nape and cheeks behind the eyes, black crown and face: it reads against the dark pod and tower
+    paint(hd, G, lambda c: c.y > -0.065 and c.z < 0.075)
     h = [hd]
     beak = lathe('beak', [(0.042, 0), (0.036, 0.04), (0.022, 0.075), (0, 0.098)], segs=8,
                  material='black_rubber', loc=(0, -0.19, 0.39))
@@ -279,7 +280,8 @@ def build_jackdaw():
     h.append(beak)
     for s in (1, -1):
         o = Vector((s * 0.72, -0.6, 0.32)).normalized()
-        h += eye('eye', hc + o * 0.088, Vector((s * 0.75, -0.62, 0.15)), 0.036, 'eye_pale', pupil=0.45, push=0.7)
+        # glow_: the pale eyes are unlit and bloom at dusk, so the bird can be spotted in the dark upper sections
+        h += eye('eye', hc + o * 0.088, Vector((s * 0.75, -0.62, 0.15)), 0.042, 'glow_eye_pale', pupil=0.42, push=0.7)
     part(h, P, 'head', root, origin=(0, -0.075, 0.335))
 
     stations = [

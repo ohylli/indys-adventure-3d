@@ -57,6 +57,17 @@ class Assets {
     this.vcToon = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: this.gradient, name: 'vc_toon' });
     this.vcGlow = new THREE.MeshBasicMaterial({ vertexColors: true, name: 'glow_vc' });
     this.glowMats.push({ mat: this.vcGlow, base: new THREE.Color(1, 1, 1), day: null });
+    // vcToon plus a hard cool rim along the silhouette, for dark creatures that must stand out from dark backgrounds
+    this.rim = { rimColor: { value: new THREE.Color('#b4cdff') }, rimStrength: { value: 0 } };
+    this.vcToonRim = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: this.gradient, name: 'vc_toon_rim' });
+    this.vcToonRim.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.rim);
+      shader.fragmentShader = 'uniform vec3 rimColor;\nuniform float rimStrength;\n' + shader.fragmentShader.replace('#include <opaque_fragment>', `
+        float rimEdge = 1.0 - max(dot(normalize(normal), normalize(vViewPosition)), 0.0);
+        outgoingLight += rimColor * rimStrength * smoothstep(0.5, 0.6, rimEdge);
+        #include <opaque_fragment>`);
+    };
+    this.vcToonRim.customProgramCacheKey = () => 'vc_toon_rim';
     this.glow = 0;
     this.missing = new Set();
   }
@@ -178,6 +189,7 @@ class Assets {
 
   _applyGlow() {
     const g = this.glow;
+    this.rim.rimStrength.value = 0.4 + 0.5 * g;
     for (const { mat, base, day } of this.glowMats) {
       if (day) mat.color.copy(day).lerp(base, g).multiplyScalar(1 + g * 1.5);
       else mat.color.copy(base).multiplyScalar(0.92 + g * 1.7);

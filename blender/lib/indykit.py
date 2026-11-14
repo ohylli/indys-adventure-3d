@@ -54,7 +54,7 @@ PALETTE = {
     'eye_green': '#a3b86c', 'eye_amber': '#cfb760', 'eye_dark': '#1f1b1a', 'eye_white': '#ffffff',
     # birds / people
     'gull_white': '#f5f5f2', 'gull_grey': '#9aa7b5', 'beak_yellow': '#f5b72e', 'beak_orange': '#f08a2a',
-    'jackdaw_black': '#2c2d36', 'jackdaw_grey': '#70737f', 'eye_pale': '#dfe8f0',
+    'jackdaw_black': '#363a4b', 'jackdaw_grey': '#a7acba', 'glow_eye_pale': '#e6f1ff',
     'skin_a': '#f1c6a0', 'skin_b': '#c98d62', 'skin_c': '#8a5a3c', 'hair_dark': '#3a2a22', 'hair_blond': '#e6c36a',
     # precious
     'gold': '#f5c542', 'gold_dark': '#c9922a', 'fish_orange': '#f79a3a', 'fish_light': '#ffd08a',

@@ -31,6 +31,8 @@ function bird(name) {
   obj.userData.wingL = assets.part(obj, 'wing_L');
   obj.userData.wingR = assets.part(obj, 'wing_R');
   obj.userData.head = assets.part(obj, 'head');
+  // the jackdaw is nearly black: a rim light keeps its silhouette visible against the shaded tower and the pod
+  if (name === 'jackdaw') obj.traverse((o) => { if (o.isMesh && o.material === assets.vcToon) o.material = assets.vcToonRim; });
   return obj;
 }
 
@@ -282,7 +284,7 @@ export class Percher {
     this.dir.subVectors(this.home, from).setY(0);
     if (this.dir.lengthSq() < 0.01) this.dir.set(this.home.x, 0, this.home.z);
     this.dir.normalize().setY(0.75).normalize();
-    this.ctx.particles.burst('feather', this.home, { count: this.kind === 'jackdaw' ? 6 : 4, color: this.kind === 'jackdaw' ? 0x3a3b46 : 0xc8d0da });
+    this.ctx.particles.burst('feather', this.home, { count: this.kind === 'jackdaw' ? 6 : 4, color: this.kind === 'jackdaw' ? 0x40445a : 0xc8d0da });
     this.ctx.audio.sfx('flap', { volume: 0.7 });
     if (this.kind === 'jackdaw') this.ctx.audio.sfx('jackdaw', { volume: 0.7 });
   }

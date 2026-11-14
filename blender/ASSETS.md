@@ -89,7 +89,7 @@ modelled spread out flat along ±X. The game flaps by rotating them about the fo
 | Piece | Spec |
 | --- | --- |
 | `gull` | Cartoon herring gull, body 0.9 long, wingspan 2.4. White body, grey wings with dark tips, yellow beak with a red dot, cheeky eyes. Children: `body` (mesh incl. head, beak, tail, tucked feet), `wing_L`, `wing_R`. Origin = body centre. |
-| `jackdaw` | Jackdaw (naakka): small stocky black bird, 0.55 long, grey nape, pale eye. Standing pose with feet; origin = bottom centre between the feet. Children: `body`, `wing_L`, `wing_R` (wingspan 1.1, modelled spread; the game folds them when perched), `head` (origin at the neck, so it can tilt). |
+| `jackdaw` | Jackdaw (naakka): small stocky black bird, 0.55 long, silver-grey nape and cheeks, black crown, large pale eyes (`glow_eye_pale`, so they bloom at dusk). Standing pose with feet; origin = bottom centre between the feet. Children: `body`, `wing_L`, `wing_R` (wingspan 1.1, modelled spread; the game folds them when perched), `head` (origin at the neck, so it can tilt). |
 | `pigeon` | Plump city pigeon, 0.5 long, blue-grey with iridescent green/purple neck patch. Same structure as the jackdaw. |
 | `visitor_a`, `visitor_b`, `visitor_c` | Chibi festival visitors, 2.6 tall, big head (about 1/3 of the height), simple mitten hands, different outfits/hair/skin, one holds a balloon string or an ice cream. Origin = bottom centre. Children: `body` (torso+legs), `head` (origin at neck), `arm_L`, `arm_R` (origin at shoulder, hanging down). |
 
