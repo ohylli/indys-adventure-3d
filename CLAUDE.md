@@ -46,7 +46,7 @@ blender/*.py            one script per GLB: indy, tower, kit_rides, kit_festival
 blender/ASSETS.md       the spec of every model (names, sizes, origins) that the game code relies on
 public/assets/*.glb     exported models
 tools/                  dev sandboxes (audio.html, ui.html, fx.html), montage.mjs (contact sheets of images),
-                        record.mjs (renders a playthrough video with audio)
+                        record.mjs (renders a playthrough video with audio), screenshots.mjs (the README screenshots)
 tests/                  run.mjs + bot.js + route.js (the playthrough), touch-check.mjs, and the subagents' checks
 ```
 
@@ -104,6 +104,8 @@ tests/                  run.mjs + bot.js + route.js (the playthrough), touch-che
 - `node tools/record.mjs` renders a showcase video (title, the bot's climb, claim, results) with the game's audio to
   `tests/out/video/indy-playthrough.mp4`, offline and frame by frame on Playwright's fake clock (needs ffmpeg on PATH).
   `--only=name`, `--max=seconds`, `--fps=30`, `--size=1280x720`. Its header explains how it works.
+- `node tools/screenshots.mjs` retakes the README screenshots in `screenshots/` (the bot climbs and a shot is taken at
+  set moments; `--only=wheel,claim`, `--out=dir`). Rerun it after changing how Indy or the stage looks.
 - `window.indy` (src/debug.js): `start()`, `manual(true)` + `step(n, input)`, `tp(a, r, y)`, `cp(i)`, `god(true)`, `info()`.
 - The Playwright MCP browser is good for looking at the game: load the dev server, call `indy.start()`, teleport with
   `indy.cp(i)`, take screenshots. `node tools/montage.mjs out.png <cols> a.png b.png …` tiles screenshots into one image.
