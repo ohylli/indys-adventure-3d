@@ -3,6 +3,7 @@
 //   node tests/run.mjs --each          every section on its own, from its checkpoint (pinpoints a broken section)
 //   node tests/run.mjs --only=festival one section
 //   node tests/run.mjs --god           nothing hurts (route feasibility only)
+//   node tests/run.mjs --showcase      with the pauses of the showcase video (tools/record.mjs)
 //   node tests/run.mjs --url=http://127.0.0.1:5173/   use a running dev server instead of starting one
 //   node tests/run.mjs --shots         save a screenshot at the end of each section (tests/out/bot/)
 import { chromium } from 'playwright';
@@ -38,17 +39,18 @@ async function boot() {
   await page.evaluate((god) => { window.indy.manual(true); window.indy.god(!!god); }, !!args.god);
   await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'tests', 'bot.js'), 'utf8') });
   await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'tests', 'route.js'), 'utf8') });
+  await page.evaluate((on) => { window.bot.showcase = on; }, !!args.showcase);
 }
 
 async function runSection(i, alone) {
-  return page.evaluate(([i, alone]) => {
+  return page.evaluate(async ([i, alone]) => {
     const s = window.route[i];
     const t0 = window.bot.steps;
     try {
-      if (alone && s.cp != null) { window.indy.cp(s.cp); window.bot.hold({}, 30); }
+      if (alone && s.cp != null) { window.indy.cp(s.cp); await window.bot.hold({}, 30); }
       const g = window.indy.game;
       const before = { hearts: g.hearts, naps: g.naps };
-      s.run();
+      await s.run();
       return { name: s.name, ok: true, seconds: +((window.bot.steps - t0) / 60).toFixed(1), heartsLost: Math.max(0, before.hearts - g.hearts), naps: g.naps - before.naps, info: window.indy.info() };
     } catch (e) {
       return { name: s.name, ok: false, seconds: +((window.bot.steps - t0) / 60).toFixed(1), error: String(e.message || e) };
@@ -60,7 +62,8 @@ await boot();
 if (args.eval) {
   // debugging aid: run a snippet (the body of a function using window.bot / window.indy) and print what it returns
   const body = fs.readFileSync(args.eval, 'utf8');
-  const res = await page.evaluate((body) => { try { return new Function(body)(); } catch (e) { return 'ERROR ' + (e.stack || e); } }, body);
+  // the bot is async: a snippet that drives it should await (it runs as the body of an async function)
+  const res = await page.evaluate(async (body) => { try { return await new (async () => {}).constructor(body)(); } catch (e) { return 'ERROR ' + (e.stack || e); } }, body);
   console.log(typeof res === 'string' ? res : JSON.stringify(res, null, 1));
   if (args.shot) { await page.waitForTimeout(500); await page.screenshot({ path: path.join(outDir, String(args.shot)) }); }
   await browser.close(); if (server) await server.close();

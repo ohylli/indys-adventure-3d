@@ -45,7 +45,8 @@ blender/lib/indykit.py  shared Blender helpers and the colour PALETTE
 blender/*.py            one script per GLB: indy, tower, kit_rides, kit_festival, creatures, items, environment
 blender/ASSETS.md       the spec of every model (names, sizes, origins) that the game code relies on
 public/assets/*.glb     exported models
-tools/                  dev sandboxes (audio.html, ui.html, fx.html) and montage.mjs (contact sheets of images)
+tools/                  dev sandboxes (audio.html, ui.html, fx.html), montage.mjs (contact sheets of images),
+                        record.mjs (renders a playthrough video with audio)
 tests/                  run.mjs + bot.js + route.js (the playthrough), touch-check.mjs, and the subagents' checks
 ```
 
@@ -98,6 +99,11 @@ tests/                  run.mjs + bot.js + route.js (the playthrough), touch-che
   `--god`, `--shots`, `--url=http://127.0.0.1:5173/` (use a running dev server), `--eval=file.js` (run a snippet with
   `window.bot` and `window.indy` after booting, for debugging). The route is `tests/route.js`.
   After changing the level layout or `player.js`, run it; if a section fails, `--each` shows which one.
+- The bot (`tests/bot.js`) is async: route steps are `await b.walk(...)` etc. `b.beat(s)` is a pause that only happens
+  in showcase recordings; put it only where Indy stands safely.
+- `node tools/record.mjs` renders a showcase video (title, the bot's climb, claim, results) with the game's audio to
+  `tests/out/video/indy-playthrough.mp4`, offline and frame by frame on Playwright's fake clock (needs ffmpeg on PATH).
+  `--only=name`, `--max=seconds`, `--fps=30`, `--size=1280x720`. Its header explains how it works.
 - `window.indy` (src/debug.js): `start()`, `manual(true)` + `step(n, input)`, `tp(a, r, y)`, `cp(i)`, `god(true)`, `info()`.
 - The Playwright MCP browser is good for looking at the game: load the dev server, call `indy.start()`, teleport with
   `indy.cp(i)`, take screenshots. `node tools/montage.mjs out.png <cols> a.png b.png …` tiles screenshots into one image.

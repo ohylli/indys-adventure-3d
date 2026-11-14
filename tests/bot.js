@@ -16,12 +16,13 @@
     const e = new Error(`${what} | at ${JSON.stringify(window.indy.info())} | after: ${log.slice(-4).join(' > ')}`);
     throw e;
   }
-  function step(inp = {}) {
+  async function step(inp = {}) {
     // with autoMeow on, the bot meows every 0.7 s: that keeps gulls and jackdaws away, as a careful player would
     const meow = !!inp.meow || (bot.autoMeow && steps % 42 === 0);
     window.indy.step(1, { moveX: 0, moveY: 0, jump: false, ...inp, meow });
     steps++;
     if (G().state !== 'play' && G().state !== 'claim') fail('left play state: ' + G().state);
+    if (bot.onStep) await bot.onStep();
   }
   /** Stick input that heads for the cylinder point (a, r). */
   function steer(a, r) {
@@ -39,36 +40,40 @@
   }
   const bot = {
     autoMeow: false,
+    showcase: false,     // set by tools/record.mjs: beat() pauses so a viewer can look around
+    onStep: null,        // set by tools/record.mjs: awaited after every step (captures video frames)
     log, get steps() { return steps; },
     note(s) { log.push(s); },
-    hold(inp, n) { for (let i = 0; i < n; i++) step(inp); },
-    wait(fn, max = 1800, what = 'wait') { for (let i = 0; i < max; i++) { if (fn()) return i; step(); } fail(what + ' timed out'); },
+    async hold(inp, n) { for (let i = 0; i < n; i++) await step(inp); },
+    /** Stand still for a moment (only in showcase recordings; the test runs straight through). */
+    async beat(seconds = 1.5) { if (bot.showcase) await bot.hold({}, Math.round(seconds * 60)); },
+    async wait(fn, max = 1800, what = 'wait') { for (let i = 0; i < max; i++) { if (fn()) return i; await step(); } fail(what + ' timed out'); },
     /** Walk to (a, r) on the current footing. */
-    walk(a, r, o = {}) {
+    async walk(a, r, o = {}) {
       log.push(`walk ${a},${r}`);
       const tol = o.tol ?? 0.35, max = o.max ?? 1500;
       for (let i = 0; i < max; i++) {
         const s = steer(a, r);
         if (s.dist < tol || (o.until && o.until())) return;
-        step({ moveX: s.moveX, moveY: s.moveY, meow: !!o.meow && i % 40 === 0 });
+        await step({ moveX: s.moveX, moveY: s.moveY, meow: !!o.meow && i % 40 === 0 });
         if (!o.fall && P().state === 'air' && Y() < (o.minY ?? -1e9)) fail('fell while walking');
       }
       fail(`walk ${a},${r} timed out`);
     },
     /** Jump toward (a, r) and steer until standing or climbing again. o.pounce: lunge at the top of the arc. */
-    jump(a, r, o = {}) {
+    async jump(a, r, o = {}) {
       log.push(`jump ${a},${r}${o.pounce ? ' pounce' : ''}`);
       const hold = o.hold ?? 26, max = o.max ?? 260;
       let pounceAt = -1;
       const hearts0 = G().hearts, from = `a=${A().toFixed(1)} r=${R().toFixed(2)} y=${Y().toFixed(2)} t=${G().time.toFixed(2)}`;
-      step({});                                   // let go of the button first so this is a fresh press
+      await step({});                                   // let go of the button first so this is a fresh press
       for (let i = 0; i < max; i++) {
         const s = steer(a, r), p = P();
         let jump = i < hold;
         if (o.pounce && pounceAt < 0 && i > 3 && p.state === 'air' && p.vel.y < (o.pounceVy ?? 3)) pounceAt = i + 1;
         if (pounceAt >= 0 && i >= pounceAt && i < pounceAt + 3) jump = true; else if (pounceAt >= 0 && i === pounceAt - 1) jump = false;
         if (pounceAt >= 0 && i < pounceAt) jump = false;
-        step({ moveX: o.still ? 0 : s.moveX, moveY: o.still ? 0 : s.moveY, jump });
+        await step({ moveX: o.still ? 0 : s.moveX, moveY: o.still ? 0 : s.moveY, jump });
         if (i > 2 && (P().state === 'ground' || P().state === 'climb')) {
           const miss = Math.hypot(r * Math.sin(a * DEG) - P().pos.x, r * Math.cos(a * DEG) - P().pos.z);
           if (miss > (o.within ?? 2.2) || G().hearts < hearts0) fail(`jump ${a},${r} went wrong (landed ${miss.toFixed(1)} away, hearts ${hearts0} -> ${G().hearts}, from ${from})`);
@@ -78,22 +83,22 @@
       fail(`jump ${a},${r} never landed`);
     },
     /** Hold up on a climbable until at least y, or until the top hop lands. */
-    climb(y, o = {}) {
+    async climb(y, o = {}) {
       log.push(`climb to ${y}`);
       if (P().state !== 'climb') fail('not climbing');
       for (let i = 0; i < (o.max ?? 1200); i++) {
-        step({ moveY: 1, moveX: o.x ?? 0, meow: !!o.meow && i % 45 === 0 });
+        await step({ moveY: 1, moveX: o.x ?? 0, meow: !!o.meow && i % 45 === 0 });
         if (P().state !== 'climb') return;        // hopped over the top (or reached the floor)
         if (P().state === 'climb' && Y() >= y) return;
       }
       fail('climb timed out');
     },
     /** After a top hop: steer to (a, r) until landed (or hanging on the next climbable). */
-    land(a, r, o = {}) {
+    async land(a, r, o = {}) {
       for (let i = 0; i < (o.max ?? 200); i++) {
         if (P().state === 'ground' || (o.orClimb && P().state === 'climb')) return;
         const s = steer(a, r);
-        step({ moveX: s.moveX, moveY: s.moveY });
+        await step({ moveX: s.moveX, moveY: s.moveY });
       }
       fail('never landed');
     },

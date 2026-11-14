@@ -62,6 +62,10 @@
 //     (follows progress), tension, seed, stopAfter (s: fade the song out there), log (records every pitched note
 //     in buf.log), opts for sfx/meow, and { loop: 'wind_high', opts: { volume } }. The buffer gets a .stats object
 //     { started, ended, maxLive, events, liveTrace }. Offline renders always use the default volumes, unmuted.
+//   - Recording (tools/record.mjs renders a playthrough video offline, much slower than real time):
+//     audio.record(now) starts logging every call (setMusic, sfx, meow, loop, ...) with the time now() returns in
+//     seconds, and keeps the live context silent; audio.stopRecording() returns the log; audio.renderSession(log,
+//     seconds) replays a log into an OfflineAudioContext (the same engine, so it sounds like the live game).
 //   - audio._debug exposes the live context, graph and player for the dev sandbox and tests.
 
 import { createGraph, volumeToGain, DEFAULT_VOLUMES, clamp01 } from './graph.js';
@@ -97,6 +101,8 @@ const fading = [];
 const loops = new Map(); // name → Ambience
 const lastSfx = new Map();
 let timer = null;
+let offline = false; // true while renderSession drives the engine with an OfflineAudioContext
+let rec = null; // { now, log, last } while recording
 
 const state = {
   music: 'none',
@@ -109,7 +115,7 @@ const state = {
 };
 
 function running() {
-  return !!ctx && ctx.state === 'running';
+  return !!ctx && (offline || ctx.state === 'running');
 }
 
 function applyMix(immediate = false) {
@@ -167,6 +173,7 @@ export const audio = {
   set muted(b) { this.setMuted(b); },
 
   unlock() {
+    if (rec) return;
     if (ctx) {
       if (ctx.state !== 'running' && !(typeof document !== 'undefined' && document.hidden)) ctx.resume().catch(() => {});
       return;
@@ -183,7 +190,7 @@ export const audio = {
     applyMix(true);
     if (state.music !== 'none') startSong(state.music);
     syncLoops();
-    timer = setInterval(tick, TIMER_MS);
+    timer = setInterval(() => { if (!offline) tick(); }, TIMER_MS);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
   },
@@ -238,7 +245,7 @@ export const audio = {
     const now = ctx.currentTime;
     const last = lastSfx.get(name);
     if (last != null && now - last < MIN_REPEAT) return;
-    if (G.stats.live > MAX_LIVE) return;
+    if (G.stats.live > MAX_LIVE) { G.stats.dropped = (G.stats.dropped || 0) + 1; return; }
     lastSfx.set(name, now);
     if (!playSfx(G, name, opts, now + 0.005)) console.warn(`audio.sfx: unknown effect "${name}"`);
   },
@@ -323,6 +330,64 @@ export const audio = {
     return buf;
   },
 
+  /** Start logging every call with the time now() returns (seconds). The live context stays silent meanwhile. */
+  record(now) {
+    rec = { now, log: [], last: new Map() };
+    if (ctx) ctx.suspend().catch(() => {});
+    // what is already playing when the recording starts
+    const t = 0;
+    if (state.music !== 'none') rec.log.push([t, 'setMusic', [state.music]]);
+    rec.log.push([t, 'setProgress', [state.progress]], [t, 'setSection', [state.section]], [t, 'setVolumes', [{ ...state.volumes }]]);
+    for (const [name, l] of state.loops) rec.log.push([t, 'loop', [name, l.on, { volume: l.volume }]]);
+  },
+
+  /** Stop recording; returns the log ([time, method, args] entries). */
+  stopRecording() {
+    const log = rec ? rec.log : [];
+    rec = null;
+    return log;
+  },
+
+  /** Replay a recorded log into an OfflineAudioContext. -> Promise<AudioBuffer> */
+  async renderSession(log, seconds, rate = 48000) {
+    const ac = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
+    const saved = { ctx, G, player, timer, fading: fading.splice(0), loops: new Map(loops), lastSfx: new Map(lastSfx), state: { ...state, loops: new Map(state.loops) } };
+    loops.clear(); lastSfx.clear();
+    ctx = ac; G = createGraph(ac); player = null; offline = true; rec = null;
+    Object.assign(state, { music: 'none', progress: 0, section: 0, tension: 0, muted: false, volumes: { ...DEFAULT_VOLUMES }, loops: new Map() });
+    applyMix(true);
+    // events land on render-quantum boundaries; the scheduler also ticks every 20 ms in between
+    const q = 128 / rate, at = new Map();
+    const slot = (t) => Math.max(1, Math.round(Math.max(0, t) / q));
+    for (const e of log) {
+      if (e[1] === 'setMuted' || e[0] >= seconds - 0.05) continue;
+      const k = slot(e[0]);
+      if (!at.has(k)) at.set(k, []);
+      at.get(k).push(e);
+    }
+    for (let t = 0.02; t < seconds - 0.05; t += 0.02) { const k = slot(t); if (!at.has(k)) at.set(k, []); }
+    const apply = (evs) => { for (const [, name, args] of evs) impl[name].apply(audio, args); tick(); };
+    for (const [k, evs] of at) {
+      ac.suspend(k * q).then(() => {
+        try { apply(evs); } catch (err) { console.warn('[audio] renderSession:', err); }
+        ac.resume();
+      });
+    }
+    try {
+      const buf = await ac.startRendering();
+      const st = G.stats;
+      buf.stats = { started: st.started, ended: st.ended, maxLive: st.maxLive, dropped: st.dropped || 0 };
+      return buf;
+    } finally {
+      ({ ctx, G, player, timer } = saved);
+      offline = false;
+      fading.push(...saved.fading);
+      loops.clear(); for (const [k, v] of saved.loops) loops.set(k, v);
+      lastSfx.clear(); for (const [k, v] of saved.lastSfx) lastSfx.set(k, v);
+      Object.assign(state, saved.state);
+    }
+  },
+
   /** For the dev sandbox and tests. */
   _debug: {
     get ctx() { return ctx; },
@@ -333,3 +398,24 @@ export const audio = {
     get fading() { return fading.length; },
   },
 };
+
+// While recording, log the calls that make sound (consecutive repeats of per-frame calls are skipped).
+const LOGGED = ['setMusic', 'setProgress', 'setSection', 'setTension', 'duck', 'sfx', 'meow', 'loop', 'setVolumes'];
+const SAME_ARGS_SKIP = new Set(['setProgress', 'setSection', 'setTension', 'loop']);
+const impl = {};
+for (const name of LOGGED) {
+  const fn = audio[name];
+  impl[name] = fn;
+  audio[name] = function (...args) {
+    if (rec) {
+      const copy = JSON.parse(JSON.stringify(args));
+      const key = name === 'loop' ? 'loop:' + args[0] : name;
+      const sig = JSON.stringify(copy);
+      if (!SAME_ARGS_SKIP.has(name) || rec.last.get(key) !== sig) {
+        rec.last.set(key, sig);
+        rec.log.push([rec.now(), name, copy]);
+      }
+    }
+    return fn.apply(this, args);
+  };
+}
