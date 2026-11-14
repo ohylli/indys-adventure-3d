@@ -38,6 +38,9 @@ export function buildLevel(L) {
   // the ground: the paved plaza, and the quay running out over the lake
   world.addStaticGeometry(disc(0, 34.5));
   world.addStaticGeometry(box3(cyl(180, 39.5, -0.5), [6.4, 1, 13], 180));
+  // the quay is fenced along its sides (its rope rails), continuing the plaza wall: the lawn beside it and the cove's
+  // stone wall look solid but have no collision, so Indy must not step or jump off the pier onto them
+  for (const s of [-1, 1]) world.addStaticGeometry(box3(new THREE.Vector3(s * 3.4, 4, -39.5), [0.4, 10, 13], 0));
 }
 
 // ---------------------------------------------------------------------------------------------------- 0 plaza
