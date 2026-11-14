@@ -110,23 +110,31 @@ def _tail_field(p):
     return min(best, (p.y - 0.455) * 1.0 + (p.z - 0.50) * 0.35)
 
 
+def _table(tab, x):
+    """Piecewise-linear lookup in [(x, y), ...] sorted by x."""
+    if x <= tab[0][0]:
+        return tab[0][1]
+    for (x0, y0), (x1, y1) in zip(tab, tab[1:]):
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+    return tab[-1][1]
+
+
+# Lower edge of the cap (head-local height) by angle round the head (0 = front, pi = back). It is lopsided, as on
+# the real Indy: on his left the eye sits in white and the edge slants from the blaze's tip down to the outer brow;
+# on his right the dark wraps round the eye and runs down the cheek to the jaw.
+CAP_EDGE_L = [(0.0, 0.22), (0.3, 0.19), (0.6, 0.13), (0.9, 0.11), (1.4, 0.10), (1.9, 0.06), (2.4, 0.02), (math.pi, 0.0)]
+CAP_EDGE_R = [(0.0, -0.04), (0.3, -0.10), (0.6, -0.12), (1.0, -0.15), (1.4, -0.17), (1.9, -0.12), (2.4, -0.03), (math.pi, 0.0)]
+
+
 def _cap_field(p):
-    """Dark tabby cap: top of the head, around the outer half of the eyes, lower on his right side.
+    """Brown tabby cap: top of the head and the ears, down round his right eye and cheek, above his left eye.
     White blaze up the forehead, skewed slightly to his left."""
     h = p - HEAD_C
     if h.length > 0.52:
         return -1.0
-    # lower edge of the cap as a height that depends on where around the head we are
-    ang = math.atan2(h.x, -h.y)                 # 0 = front, +90deg = his left, 180 = back
-    a = abs(ang)
-    front = max(0.0, 1.0 - a / 1.2)             # 1 at the front, 0 from ~70deg on
-    side = math.exp(-((a - 1.45) / 0.55) ** 2)  # around the temples/cheeks
-    back = max(0.0, (a - 2.0) / 1.14)
-    edge = 0.035 * front - 0.095 * side + 0.03 * back
-    if h.x < 0:                                 # his right side: cap comes further down the cheek
-        edge -= 0.075 * side
-    else:
-        edge += 0.02 * side
+    a = math.atan2(h.x, -h.y)                   # 0 = front, +90deg = his left, 180 = back
+    edge = _table(CAP_EDGE_L if a >= 0 else CAP_EDGE_R, abs(a))
     cap = (h.z - edge) * 0.9
     # the blaze: a wedge of white from the muzzle up the forehead
     if h.y < 0.02:
@@ -134,8 +142,8 @@ def _cap_field(p):
         half = 0.105 - 0.42 * max(0.0, h.z - 0.02)   # narrows upward
         half = max(half, -0.05)
         blaze = half - abs(h.x - cx)
-        blaze = min(blaze, 0.02 - h.y)
-        blaze = min(blaze, 0.262 - h.z + 0.4 * 0)     # stops below the crown
+        blaze = min(blaze, -0.10 - h.y)               # on the face, not over the top of the head
+        blaze = min(blaze, 0.235 - h.z)               # tip at about the height of the ears' bases
         cap = min(cap, -blaze)
     return cap
 
@@ -160,16 +168,20 @@ def dark_field(p):
     return max(f['fur_tail'], f['fur_dark'])
 
 
+def _tan_field(p):
+    """Warm tan round his right eye, mostly below and outside it, inside the cap."""
+    return min(_ell(p, (-0.155, -0.62, 0.66), (0.115, 0.13, 0.11)), _cap_field(p))
+
+
 def material_at(p):
     f = region_fields(p)
     if f['fur_tail'] > 0 and f['fur_tail'] >= f['fur_dark']:
         return 'fur_tail'
     if f['fur_dark'] > 0:
-        # tabby brown along the lower rim of the cap on the cheeks
-        h = p - HEAD_C
-        if h.length < 0.5 and 0 < _cap_field(p) < 0.045 and abs(h.x) > 0.13 and h.y < 0.12:
-            return 'fur_tabby'
-        return 'fur_dark'
+        cap = _cap_field(p)
+        if cap < f['fur_dark']:                 # a body patch: darker than the tabby cap
+            return 'fur_dark'
+        return 'fur_tan' if _tan_field(p) > 0 else 'fur_cap'
     return 'fur_white'
 
 
@@ -197,8 +209,8 @@ def snap_boundaries(ob, field, passes=3):
     bm.free()
 
 
-MATS = ['fur_white', 'fur_dark', 'fur_tabby', 'fur_tail', 'ear_pink', 'nose_pink', 'pad_pink',
-        'eye_green', 'eye_dark', 'eye_white', 'mouth', 'fur_cream']
+MATS = ['fur_white', 'fur_dark', 'fur_cap', 'fur_tan', 'fur_tail', 'ear_inner', 'nose_pink', 'pad_pink',
+        'eye_green', 'eye_amber', 'eye_dark', 'eye_white', 'mouth', 'fur_cream']
 
 
 def paint(ob):
@@ -288,10 +300,11 @@ def build_tufts():
 
 # ------------------------------------------------------------------------------------------------ ears, face
 def build_ear(s):
-    """Triangular ear with a pink inside. Returns (object, base point)."""
+    """Big triangular tabby ear with a pale pink inside, pale furnishings spilling out of it and a lynx tip.
+    Returns (object, base point)."""
     base = HEAD_C + V((s * 0.19, 0.03, 0.215))
-    tipv = base + V((s * 0.085, 0.02, 0.265))
-    w = 0.14
+    tipv = base + V((s * 0.095, 0.02, 0.315))
+    w = 0.155
     # outer shell: a squat 3-sided pyramid, open toward the front
     fwd = V((0, -1, 0))
     side = V((s, 0, 0.0)).normalized()
@@ -305,7 +318,7 @@ def build_ear(s):
         bm.faces.new((vs[a], vs[b], vs[4]))
     bm.faces.new((vs[3], vs[2], vs[1], vs[0]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    outer = obj_from_bmesh('_ear', bm, 'fur_dark')
+    outer = obj_from_bmesh('_ear', bm, 'fur_cap')
     # inner ear: a pink triangle set into the front faces
     c = (bl + br + tipv) / 3 + V((0, -0.058, 0.0))
     k = 0.60
@@ -317,10 +330,18 @@ def build_ear(s):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ext = bmesh.ops.extrude_face_region(bm, geom=[f])
     bmesh.ops.translate(bm, vec=V((0, 0.03, 0)), verts=[e for e in ext['geom'] if isinstance(e, bmesh.types.BMVert)])
-    inner = obj_from_bmesh('_earin', bm, 'ear_pink')
-    # white furnishing tuft at the inner base, and a lynx tip
-    t1 = tuft(c + V((-s * 0.05, -0.05, -0.075)), (s * 0.5, -0.3, 1.0), 0.085, 0.032, 'fur_white', curl=(0, 0, 0))
-    ear = join([outer, inner, t1], f'_ear_{"L" if s > 0 else "R"}')
+    inner = obj_from_bmesh('_earin', bm, 'ear_inner')
+    # furnishings: a fan of pale locks rising from the bottom of the ear across the pink, inside the rim
+    locks = []
+    for t, ln in ((-0.3, 0.5), (0.0, 0.62), (0.3, 0.5)):
+        b = il.lerp(ir, 0.5 + t) + V((0, -0.04, 0.01))
+        up = it - b
+        locks.append(tuft(b, up.normalized() + V((s * t * 0.5, -0.2, 0)), up.length * ln, 0.022, 'fur_cream',
+                          flat=0.45, curl=(0, -0.08, 0)))
+    # lynx tip: a dark lock carrying the point of the ear on upward
+    d = (tipv - (bl + br) / 2).normalized()
+    lynx = tuft(tipv - d * 0.03, d + V((s * 0.1, 0.05, 0.25)), 0.085, 0.02, 'fur_tail', flat=0.6, curl=(0, 0, 0))
+    ear = join([outer, inner, lynx] + locks, f'_ear_{"L" if s > 0 else "R"}')
     return ear, base
 
 
@@ -349,7 +370,8 @@ def build_eye(s):
     parts = [
         disc('_rim', p - n * 0.006, n, EYE_R * 1.14, EYE_R * 1.16, 0.02, 'eye_dark', tilt=tilt),
         disc('_iris', p + n * 0.002, n, EYE_R, EYE_R * 1.02, 0.022, 'eye_green', tilt=tilt),
-        disc('_pupil', p + n * 0.010 + V((-s * 0.006, 0, 0.0)), n, EYE_R * 0.66, EYE_R * 0.80, 0.018, 'eye_dark', tilt=tilt),
+        disc('_amber', p + n * 0.006 + V((-s * 0.004, 0, 0.0)), n, EYE_R * 0.82, EYE_R * 0.92, 0.02, 'eye_amber', tilt=tilt),
+        disc('_pupil', p + n * 0.010 + V((-s * 0.006, 0, 0.0)), n, EYE_R * 0.58, EYE_R * 0.74, 0.018, 'eye_dark', tilt=tilt),
         disc('_hl', p + n * 0.024 + V((0.026, 0, 0.032)), n, EYE_R * 0.27, EYE_R * 0.27, 0.01, 'eye_white'),
         disc('_hl2', p + n * 0.024 + V((-0.022, 0, -0.03)), n, EYE_R * 0.12, EYE_R * 0.12, 0.008, 'eye_white'),
     ]
@@ -422,7 +444,7 @@ def build_fedora():
 # ------------------------------------------------------------------------------------------------ assemble
 fur = build_body()
 snap_boundaries(fur, dark_field)
-snap_boundaries(fur, lambda p: (_cap_field(p) - 0.045) if (p - HEAD_C).length < 0.5 else 1.0, passes=2)
+snap_boundaries(fur, lambda p: _tan_field(p) if (p - HEAD_C).length < 0.5 else -1.0, passes=2)
 from mathutils.bvhtree import BVHTree
 _bm = bmesh.new(); _bm.from_mesh(fur.data)
 FUR_BVH = BVHTree.FromBMesh(_bm)

@@ -49,8 +49,9 @@ PALETTE = {
     'asphalt': '#5a5d66', 'paving': '#c9c2b6', 'paving_dark': '#a9a296',
     # Indy
     'fur_white': '#f7f2e8', 'fur_cream': '#e9e0d0', 'fur_dark': '#3a2f2b', 'fur_tabby': '#7b5c46', 'fur_tail': '#2d2523',
+    'fur_cap': '#514843', 'fur_tan': '#8a6a4e', 'ear_inner': '#e2b2a6',
     'nose_pink': '#f29aa5', 'ear_pink': '#f3b3b3', 'pad_pink': '#f0a0aa', 'mouth': '#a8324a',
-    'eye_green': '#a9c95a', 'eye_dark': '#1f1b1a', 'eye_white': '#ffffff',
+    'eye_green': '#a3b86c', 'eye_amber': '#cfb760', 'eye_dark': '#1f1b1a', 'eye_white': '#ffffff',
     # birds / people
     'gull_white': '#f5f5f2', 'gull_grey': '#9aa7b5', 'beak_yellow': '#f5b72e', 'beak_orange': '#f08a2a',
     'jackdaw_black': '#2c2d36', 'jackdaw_grey': '#70737f', 'eye_pale': '#dfe8f0',

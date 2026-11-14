@@ -8,12 +8,18 @@ const svg = (vb, body, cls = '') =>
 
 const HEART_PATH = 'M12 20.6C5.2 15.8 1.6 11.8 1.6 7.4 1.6 4.2 4.1 1.7 7.1 1.7c2 0 3.7 1 4.9 2.8 1.2-1.8 2.9-2.8 4.9-2.8 3 0 5.5 2.5 5.5 5.7 0 4.4-3.6 8.4-10.4 13.2z';
 
-// Indy's head: white fluffy face, dark tabby cap with a widow's peak, pink inner ears and nose.
+// Indy's head, as in the 3D model: white fluffy face, grey-brown tabby cap with a white blaze rising up the forehead.
+// The cap is lopsided: on his right (the viewer's left) it wraps round the eye, ringed with tan, and runs down the
+// cheek; on his left it slants from the blaze's tip down to the outer brow, so that eye sits in white.
+// Lynx tips on the ears, pale pink inside.
 const CAT_HEAD = (s = 2) => `
+  <path d="M6 3.5 5.3 .6M34 3.5 34.7 .6" stroke="${INK}" stroke-width="${s * 0.75}"/>
   <path d="M6 3.5 13.5 11Q20 8.6 26.5 11L34 3.5Q37.4 13.5 35.6 20.5 34 31.5 20 32.6 6 31.5 4.4 20.5 2.6 13.5 6 3.5Z" fill="#fffaf2" stroke="${INK}" stroke-width="${s}"/>
-  <path d="M6 3.5 13.5 11Q20 8.6 26.5 11L34 3.5Q36.2 10 35.9 15.2 29 13.4 24.6 17.2L20 21.2 15.4 17.2Q11 13.4 4.1 15.2 3.8 10 6 3.5Z" fill="#4a3f4f"/>
-  <path d="M15 11.2l1.6 3.4M20 10.4v4.2M25 11.2l-1.6 3.4" stroke="#7a6e82" stroke-width="1.5" fill="none"/>
-  <path d="M7.6 7.4 11.6 11.2 8.6 12.6Z M32.4 7.4 28.4 11.2 31.4 12.6Z" fill="#f59ab0"/>
+  <path d="M6 3.5 13.5 11Q20 8.6 26.5 11L34 3.5Q36.3 8.6 36.1 13.4 31 14.4 27.6 16.4L20.8 11.4 17.4 17.6Q16.2 20.5 16.8 23.4 14.2 26.6 9.6 26.2 6.6 25.9 5.3 23.5L4.4 20.5Q2.6 13.5 6 3.5Z" fill="#5c5049"/>
+  <ellipse cx="13.4" cy="21.3" rx="3.1" ry="3.6" fill="#8e6e52"/>
+  <path d="M10.4 13.2l1.9 2.6M14 12.2l1.3 2.7M27.4 12.4l-.9 2M30.8 13l-1 1.7" stroke="#3a302b" stroke-width="1.4" fill="none"/>
+  <path d="M7.6 7.4 11.6 11.2 8.6 12.6Z M32.4 7.4 28.4 11.2 31.4 12.6Z" fill="#eaa6b0"/>
+  <path d="M9.4 11.8 9.2 9.8M30.6 11.8 30.8 9.8" stroke="#f4ecdc" stroke-width=".8" fill="none"/>
   <path d="M6 3.5 13.5 11Q20 8.6 26.5 11L34 3.5Q37.4 13.5 35.6 20.5 34 31.5 20 32.6 6 31.5 4.4 20.5 2.6 13.5 6 3.5Z" fill="none" stroke="${INK}" stroke-width="${s}"/>
   <ellipse cx="13.6" cy="21" rx="2.3" ry="2.8" fill="${INK}"/><ellipse cx="26.4" cy="21" rx="2.3" ry="2.8" fill="${INK}"/>
   <circle cx="14.4" cy="20" r=".9" fill="#fff"/><circle cx="27.2" cy="20" r=".9" fill="#fff"/>
