@@ -135,9 +135,10 @@ export class IndyModel {
       const h = pos.y - hit.point.y;
       this.blob.visible = true;
       this.blob.position.copy(hit.point); this.blob.position.y += 0.03;
-      const sc = THREE.MathUtils.clamp(1 - h * 0.035, 0.45, 1) * 0.95;
+      // it stays big and dark while he is in the air: this is what a jump is aimed with
+      const sc = THREE.MathUtils.clamp(1 - h * 0.03, 0.6, 1) * 1.15;
       this.blob.scale.setScalar(sc);
-      this.blob.material.opacity = THREE.MathUtils.clamp(0.42 - h * 0.012, 0.16, 0.42);
+      this.blob.material.opacity = THREE.MathUtils.clamp(0.55 - h * 0.012, 0.3, 0.55);
     } else this.blob.visible = false;
   }
 }

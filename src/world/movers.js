@@ -1,4 +1,5 @@
-// Movers: kinematic platforms whose transform is a pure function of game time.
+// Movers: kinematic platforms. Their transform is a function of game time (a lift also reads its own state, which
+// an entity advances: see Level.lift).
 import * as THREE from 'three';
 
 const _m = new THREE.Matrix4();
@@ -84,35 +85,43 @@ export function bob({ a, r, y, amp = 0.6, period = 4, phase = 0, drift = 0, sway
   };
 }
 
-/** Drop ride: rises slowly from y0 to y1, waits, drops fast, waits. */
-export function dropRide({ a, r, y0, y1, up = 6, holdTop = 2.2, down = 1.1, holdBottom = 2.4, phase = 0 }) {
-  const period = up + holdTop + down + holdBottom;
-  return (t, o) => {
-    let k = (t + phase * period) % period;
-    let y;
-    if (k < holdBottom) y = y0;
-    else if ((k -= holdBottom) < up) { const s = k / up; y = y0 + (y1 - y0) * (s * s * (3 - 2 * s)); }
-    else if ((k -= up) < holdTop) y = y1;
-    else { const s = (k - holdTop) / down; y = y1 - (y1 - y0) * (s * s); }
-    placeCyl(o, a, r, y);
+/**
+ * Roll along a track at a fixed radius. `pts` are [angle, y] corners joined by straight runs (a helix where both
+ * change); speed in units/s; `offset` puts a car that far behind the head of its train. After the end of the track
+ * the car is parked out of the world for `gap` more units of travel, then starts again: both ends of the track are
+ * meant to be inside a shed, so nobody sees it come or go.
+ * The returned function also has .len (the length of the track) and .dist(t): how far along the track the car is. While it is parked
+ * dist is null, except over the last `pre` units before it starts, when it counts up from -pre to 0 (so that
+ * warning lights can come on before the car is there).
+ */
+export function track({ r, pts, speed = 5, phase = 0, offset = 0, gap = 0, pre = 0 }) {
+  const segs = [];
+  let len = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [a0, y0] = pts[i], [a1, y1] = pts[i + 1];
+    const arc = Math.abs(a1 - a0) * DEG * r, l = Math.hypot(arc, y1 - y0);
+    segs.push({ a0, y0, a1, y1, s0: len, l, pitch: Math.atan2(y1 - y0, arc) });
+    len += l;
+  }
+  const total = len + gap, back = pts[pts.length - 1][0] < pts[0][0], BLEND = 0.9;
+  const lap = (t) => (((t * speed + phase * total - offset) % total) + total) % total;
+  const dist = (t) => { const s = lap(t); return s < len ? s : s >= total - pre ? s - total : null; };
+  const fn = (t, o) => {
+    const s = lap(t);
+    if (s >= len) { o.position.set(0, -300, 0); o.visible = false; return; }
+    let i = segs.length - 1;
+    for (let j = 0; j < segs.length; j++) if (s < segs[j].s0 + segs[j].l) { i = j; break; }
+    const g = segs[i], k = (s - g.s0) / g.l, a = g.a0 + (g.a1 - g.a0) * k;
+    cyl(a, r, g.y0 + (g.y1 - g.y0) * k, o.position);
+    // nose along the direction of travel (local +X), tilted to the slope; the tilt eases in over each corner
+    let pitch = g.pitch;
+    const d0 = s - g.s0, d1 = g.s0 + g.l - s;
+    if (i > 0 && d0 < BLEND) pitch += (segs[i - 1].pitch - pitch) * 0.5 * (1 - d0 / BLEND);
+    else if (i < segs.length - 1 && d1 < BLEND) pitch += (segs[i + 1].pitch - pitch) * 0.5 * (1 - d1 / BLEND);
+    o.rotation.set(0, a * DEG + (back ? Math.PI : 0), 0, 'YXZ');
+    o.rotation.z = pitch;
+    o.visible = true;
   };
-}
-dropRide.period = (d) => (d.up ?? 6) + (d.holdTop ?? 2.2) + (d.down ?? 1.1) + (d.holdBottom ?? 2.4);
-
-/** Travel along a helix around the tower from (a0, y0) to (a1, y1), then wrap. speed in units/s along the path. */
-export function helix({ a0, a1, y0, y1, r, speed = 6, phase = 0, gap = 0 }) {
-  const arc = Math.abs(a1 - a0) * DEG * r;
-  const len = Math.hypot(arc, y1 - y0);
-  const pitch = Math.atan2(y1 - y0, arc) * Math.sign(a1 - a0);
-  const total = len + gap;
-  return (t, o) => {
-    const s = ((t * speed + phase * total) % total + total) % total;
-    const k = Math.min(1, s / len);
-    const a = a0 + (a1 - a0) * k;
-    cyl(a, r, y0 + (y1 - y0) * k, o.position);
-    // nose along the direction of travel (local +X), tilted to the slope
-    o.rotation.set(0, a * DEG + (a1 < a0 ? Math.PI : 0), 0, 'YXZ');
-    o.rotation.z = (a1 < a0 ? -1 : 1) * pitch;
-    o.visible = s <= len;
-  };
+  fn.dist = dist; fn.len = len;
+  return fn;
 }

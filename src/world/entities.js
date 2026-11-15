@@ -2,6 +2,7 @@
 // Nothing is ever killed: birds are scared off by a meow and come back later.
 import * as THREE from 'three';
 import { assets } from '../core/assets.js';
+import { LAYER_NO_OUTLINE } from '../core/layers.js';
 import { cyl, placeCyl } from './movers.js';
 
 const DEG = Math.PI / 180;
@@ -379,10 +380,14 @@ export class BounceZone {
 }
 
 // ---------------------------------------------------------------------------------------------------- hazards
-/** Gusts of wind in a band of the tower: { a0, a1, y0, y1, period = 6, blow = 2.4, strength = 15, phase = 0 } */
+/**
+ * Gusts of wind in a band of the tower: { a0, a1, y0, y1, period = 6, blow = 2.4, strength = 15, phase = 0 }.
+ * It blows outward from the tower, or with `along: 1 / -1` round the tower (to the right / left on screen), where a
+ * jump can be seen to stretch or shorten.
+ */
 export class Wind {
   constructor(ctx, opts) {
-    this.ctx = ctx; this.o = { period: 6, blow: 2.4, strength: 15, phase: 0, warn: 0.9, tangent: 0, ...opts };
+    this.ctx = ctx; this.o = { period: 6, blow: 2.4, strength: 15, phase: 0, warn: 0.9, tangent: 0, along: 0, ...opts };
     this.type = 'wind';
     this.stream = null; this.blowing = false; this.level = 0;
   }
@@ -405,6 +410,7 @@ export class Wind {
     }
     const a = player.angle, out = _w.set(Math.sin(a), 0, Math.cos(a));
     const dir = _s.copy(out).addScaledVector(_v.set(Math.cos(a), 0, -Math.sin(a)), o.tangent).normalize();
+    if (o.along) dir.set(Math.cos(a), 0, -Math.sin(a)).multiplyScalar(o.along);
     if (this.stream) {
       this.stream.rate = near ? (blow ? 46 : warn ? 9 : 0) : 0;
       if (this.stream.position) this.stream.position.copy(player.pos).addScaledVector(dir, -3);
@@ -470,7 +476,11 @@ export class Water {
   }
 }
 
-/** The front of a moving ride car: bumps Indy if it runs into him. opts: { half: Vector3 (local box), honk } */
+/**
+ * The front of a moving ride car: bumps Indy if it runs into him.
+ * opts: { half: Vector3 (local box), centre, honk (distance at which it toots), pop (in a lane too narrow to be knocked
+ * aside in, Indy is bounced straight up instead, and comes down on the roof as the car rolls under him) }
+ */
 export class Bumper {
   constructor(ctx, mover, opts = {}) {
     this.ctx = ctx; this.mover = mover; this.cool = 0; this.honk = 0;
@@ -478,6 +488,7 @@ export class Bumper {
     // Narrower than the car itself: grazing its side only pushes Indy aside.
     this.half = opts.half || new THREE.Vector3(1.7, 0.75, 0.72);
     this.centre = opts.centre || new THREE.Vector3(0, 0.55, 0);
+    this.honkAt = opts.honk ?? 13; this.pop = !!opts.pop;
   }
   update(dt, t, player) {
     this.cool = Math.max(0, this.cool - dt); this.honk = Math.max(0, this.honk - dt);
@@ -486,15 +497,87 @@ export class Bumper {
     const lp = centreOf(player).applyMatrix4(m.invMatrix);
     const d = lp.sub(this.centre);
     const dist = d.length();
-    if (dist < 13 && this.honk <= 0 && d.x > 1) { this.honk = 2.6; this.ctx.audio.sfx('honk', { volume: 0.85 }); this.ctx.game.tension(0.6); }
+    if (dist < this.honkAt && this.honk <= 0 && d.x > 1) { this.honk = 2.6; this.ctx.audio.sfx('honk', { volume: 0.85 }); this.ctx.game.tension(0.6); }
     if (Math.abs(d.x) < this.half.x && Math.abs(d.y) < this.half.y && Math.abs(d.z) < this.half.z && this.cool <= 0) {
       if (player.ground && player.ground.mover === m) return;      // riding on top is fine
       this.cool = 0.8;
-      // knocked toward the tower wall, out of the car's lane, so it rolls on past
       const rr = Math.hypot(player.pos.x, player.pos.z) || 1;
       _w.setFromMatrixPosition(m.matrix);
-      this.ctx.game.hurt(_w, { sfx: 'honk', out: 5.2, up: 8.5, dir: _s.set(-player.pos.x / rr, 0, -player.pos.z / rr) });
+      if (this.pop) this.ctx.game.hurt(_w, { sfx: 'honk', out: 0, up: 11, dir: _s.set(-player.pos.x / rr, 0, -player.pos.z / rr) });
+      // knocked toward the tower wall, out of the car's lane, so it rolls on past
+      else this.ctx.game.hurt(_w, { sfx: 'honk', out: 5.2, up: 8.5, dir: _s.set(-player.pos.x / rr, 0, -player.pos.z / rr) });
     }
+  }
+}
+
+/**
+ * A ride that waits at the bottom, carries Indy up when he stands on it and goes back down once he has left.
+ * It drives state.h (0 bottom .. 1 top), which the ride's mover reads (Level.lift).
+ * opts: { y0, y1, speed = 4 (units/s), accel = 7, delay = 0.4 (s on board before it starts), linger = 1.2 (s after
+ * Indy leaves before it goes down), drop (fall back down fast, like a drop ride, instead of sinking) }
+ */
+export class Lift {
+  constructor(ctx, mover, state, opts = {}) {
+    this.ctx = ctx; this.mover = mover; this.state = state; this.type = 'lift';
+    this.o = { speed: 4, accel: 7, delay: 0.4, linger: 1.2, drop: false, ...opts };
+    const span = Math.abs(opts.y1 - opts.y0) || 1;
+    this.vmax = this.o.speed / span; this.acc = this.o.accel / span; this.gravity = 30 / span;
+    this.reset();
+  }
+  reset() { this.state.h = 0; this.v = 0; this.board = 0; this.away = 99; this.mode = 'wait'; }
+  update(dt, t, player) {
+    const o = this.o, s = this.state;
+    const riding = !!(player.ground && player.ground.mover === this.mover);
+    if (riding) { this.board += dt; this.away = 0; } else { this.away += dt; if (this.away > 0.25) this.board = 0; }
+    if (riding && this.board > o.delay) {
+      if (this.mode !== 'up' && s.h < 0.5) this.ctx.audio.sfx('ride_ding', { volume: 0.8 });
+      this.mode = 'up';
+    } else if (this.mode === 'up' && this.away > o.linger) this.mode = 'down';
+    if (this.mode === 'up') {
+      // ease in, and ease out into the top
+      this.v = Math.min(this.v + this.acc * dt, this.vmax, Math.sqrt(2 * this.acc * Math.max(0, 1 - s.h)) + 0.01);
+      s.h = Math.min(1, s.h + this.v * dt);
+    } else if (this.mode === 'down') {
+      if (o.drop) this.v -= this.gravity * dt;
+      else this.v = Math.max(this.v - this.acc * dt, -this.vmax * 0.8, -(Math.sqrt(2 * this.acc * Math.max(0, s.h)) + 0.01));
+      s.h += this.v * dt;
+      if (s.h <= 0) {
+        s.h = 0; this.mode = 'wait';
+        if (o.drop && this.v < -0.3 && player.pos.distanceTo(this.mover.object.position) < 25) this.ctx.audio.sfx('land', { volume: 0.9, pitch: 0.6 });
+        this.v = 0;
+      }
+    }
+  }
+}
+
+/**
+ * Warning bulbs along a track: each one lights up while a car is coming and is within `ahead` units up the track, so a
+ * wave of light runs down the track in front of every train, round the bend before the train itself is in view.
+ * spots: [{ pos: Vector3, s: distance along the track }]. cars: track() motion functions.
+ */
+export class TrackLights {
+  constructor(ctx, spots, cars, opts = {}) {
+    this.ctx = ctx; this.spots = spots; this.cars = cars; this.type = 'tracklights';
+    this.o = { ahead: 13, ...opts };
+    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), spots.length);
+    this.level = new Float32Array(spots.length);
+    this.off = new THREE.Color(0.5, 0.42, 0.3); this.on = new THREE.Color(3.2, 0.75, 0.2); this.c = new THREE.Color();
+    spots.forEach((sp, i) => { this.mesh.setMatrixAt(i, _m.makeTranslation(sp.pos.x, sp.pos.y, sp.pos.z)); this.mesh.setColorAt(i, this.off); });
+    this.mesh.frustumCulled = false; this.mesh.layers.set(LAYER_NO_OUTLINE);
+    ctx.scene.add(this.mesh);
+  }
+  update(dt, t, player) {
+    const ahead = this.o.ahead;
+    for (let i = 0; i < this.spots.length; i++) {
+      const s = this.spots[i].s;
+      let lit = 0;
+      for (const car of this.cars) { const d = car.dist(t); if (d != null && s - d > -1.5 && s - d < ahead) { lit = 1; break; } }
+      const l = this.level[i] += (lit - this.level[i]) * Math.min(1, dt * 12);
+      // the lit ones flicker along the track, toward Indy
+      const pulse = 0.72 + 0.28 * Math.sin(t * 13 + s * 1.4);
+      this.mesh.setColorAt(i, this.c.copy(this.off).lerp(this.on, l * pulse));
+    }
+    this.mesh.instanceColor.needsUpdate = true;
   }
 }
 

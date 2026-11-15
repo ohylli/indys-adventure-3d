@@ -59,7 +59,8 @@ tests/                  run.mjs + bot.js + route.js (the playthrough), touch-che
   so increasing θ is "right" on screen. θ = 0 is south (the pavilion entrance), θ = 180 is the quay to the north.
 - Scale: Indy is about 1.0 tall and 1.2 long, jumps about 2.55 high and about 4.4 far (more with a pounce).
   The game tower is 140 units tall and the HUD shows altitude = y × 1.2 m (168 m at the tip). Shaft radius ≈ 5, pod ≈ 16.
-- Game logic runs at a fixed 60 Hz (`Game.fixed`). Movers are pure functions of game time.
+- Game logic runs at a fixed 60 Hz (`Game.fixed`). Movers are functions of game time; a lift (`Level.lift`) also reads
+  its own state, which its entity advances.
 
 ## Architecture notes
 
@@ -78,20 +79,42 @@ tests/                  run.mjs + bot.js + route.js (the playthrough), touch-che
 - **Player** (`world/player.js`): states `ground`, `air`, `climb`. On the ground Indy follows the floor with a
   five-ray probe (so small gaps and steps up to 0.24 are walkable) and a floating sphere handles walls. Movement is in
   the tower's frame: stick right = tangent, stick up = toward the axis (near the axis it blends to the camera's frame).
-  Hopping over the top of a climb (`vault`) is committed for 0.34 s. `TUNE` at the top of the file has every number.
+  Hopping over the top of a climb (`vault`) is committed for 0.34 s. A jump that all but reaches a ledge (its top up
+  to 0.9 above Indy's feet, just ahead of him) becomes a scramble onto it, a hop of the same kind.
+  `TUNE` at the top of the file has every number.
 - **Movers** (`world/movers.js`): motion functions `(t, object)`; `Level.mover()` wraps a kit piece, registers its
   collider and climbables in the mover's local space, and the player is carried by `mover.delta`.
+  `track()` rolls a coaster car between the two car sheds (parked out of the world in between). `Level.lift()` makes a
+  ride that waits at the bottom and goes up when Indy stands on it (the drop car, the hot-air balloon).
 - **Level** (`world/leveldata.js`): the stage as code, one function per section, using the builder in `level.js`
-  (`piece`, `mover`, `arcDeck`, `box`, `cable`, `treat`, `checkpoint`, `gull`, `wind`, `sparkler`, `hint`, …).
-  Checkpoint order matters: `tests/route.js` refers to checkpoints by index.
+  (`piece`, `mover`, `lift`, `arcDeck`, `arcWall`, `arcRail`, `box`, `cable`, `treat`, `checkpoint`, `gull`, `wind`,
+  `sparkler`, `hint`, `camZone`, …). Checkpoint order matters: `tests/route.js` refers to checkpoints by index.
+  Lay it out by the rules in "Level design rules" below.
 - **Entities** (`world/entities.js`): each has `update(dt, t, player)` and optionally `onMeow(pos)` and `reset()`.
   They talk to the game through `ctx.game` (`hurt`, `collect`, `setCheckpoint`, `hint`, `tension`, `playing`).
   Give an entity a `type` string if a test needs to find it (class names are minified in the build).
 - **Camera** (`world/camera.js`): follows Indy's angle around the tower with a little lead; `mode` is `follow`,
-  `orbit` (claim) or `title`.
+  `orbit` (claim) or `title`. `Level.camZone()` marks parts of the tower where it leads further (the coaster, to see
+  the trains coming) or rides higher (rows of small platforms, so their tops and the gaps are seen from above).
 - **Audio** (`audio/index.js` header) and **UI** (`ui/index.js` header) document their own APIs. The game calls audio
   through a proxy that logs and swallows exceptions, so sound can never stop the game.
   Frame order: `input.poll()` → game logic → `ui.tick()`. The UI handles the M and R keys and the pause menu itself.
+
+## Level design rules
+
+The camera looks straight in at the tower, so distance along the tower (left/right) reads well and distance toward or
+away from the tower is depth, which is hard to judge. The route up is laid out accordingly:
+
+- A jump on the route goes along the tower at one radius. Changes of radius are walked, on solid footing (a plank, a
+  strut, a deep deck), or made by stepping on or off something that passes close by. Jumps toward or away from the
+  camera are for optional things (the charm).
+- Space platforms by the jump: a full jump held to the right must land on the next one both standing in the middle of
+  this one and running off its far edge. That puts centres about 3.75 to 4.6 apart (the reach of a jump is about 4.2
+  on the level and 3.9 onto something 1.5 higher), with rises of at most about 1.5. Platforms that bob do so together.
+- Nothing on the route makes Indy wait for a timetable: rides start when he boards, or come by every few seconds.
+- A hazard is seen before it arrives (the coaster's warning bulbs, the sheds its trains come out of) and there is a
+  way to play it, not only to wait it out.
+- The route itself is forgiving; treats, hearts and the charm are where the harder jumps go.
 
 ## Testing
 

@@ -358,7 +358,7 @@ export class Game {
       else if (ev === 'pounce') { audio.sfx('pounce'); this.indy.jumpPulse(); P.burst('dust', p.pos, { count: 4 }); }
       else if (ev === 'land') { const hard = p.landImpact > 9; audio.sfx('land', { volume: hard ? 1 : 0.55 }); this.indy.landPulse(p.landImpact); if (hard) P.burst('land', p.pos); }
       else if (ev === 'grab') audio.sfx('climb');
-      else if (ev === 'vault') { audio.sfx('vault'); this.indy.jumpPulse(); }
+      else if (ev === 'vault' || ev === 'scramble') { audio.sfx('vault'); this.indy.jumpPulse(); if (ev === 'scramble') P.burst('dust', p.pos, { count: 3 }); }
       else if (ev === 'fell' && this.state === 'play' && !this.respawn) {
         if (p.pos.y < -4) { audio.sfx('splash'); P.burst('splash', _v.set(p.pos.x, -5.8, p.pos.z), { count: 22, scale: 1.6 }); }
         else audio.sfx('fall');
@@ -397,6 +397,8 @@ export class Game {
       if (!onWheel && this.section < 1) s = 0;
       else if (!onWheel && p.pos.y < 4) s = this.section >= 1 ? 1 : 0;
     }
+    // riding a swing seat over its high side is not yet the next section
+    if (s === 5 && this.section <= 4 && p.ground && p.ground.mover && p.ground.mover.name === 'swing_chair') s = 4;
     if (s !== this.section) {
       const first = this.section < 0;
       this.section = s;
@@ -466,6 +468,8 @@ export class Game {
         o.radius += (30 - o.radius) * k;
         o.height += (TOP_Y + 7 - o.height) * k;
       }
+      const help = this.level.camHelp(p);
+      this.cam.want.lead = help.lead; this.cam.want.lift = help.lift;
       this.cam.update(dt, p, this.renderPos);
     }
 

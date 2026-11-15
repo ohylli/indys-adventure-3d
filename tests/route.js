@@ -4,6 +4,7 @@
 (() => {
   const b = window.bot;
   const { A, R, Y, P, G, norm } = b;
+  const DEG = Math.PI / 180;
   const ent = (type) => G().level.entities.filter((e) => e.type === type);     // (class names do not survive the build)
   const windCalm = () => ent('wind').every((w) => w.level < 0.05 && !w.warned && !w.blowing);
 
@@ -42,18 +43,37 @@
         await b.jump(150, 13.2, { hold: 10 });
         b.expect(Y() > 16 && R() < 15, 'to be on the pier');
         await b.beat(1.5);
-        await b.walk(150, 8.5);
-        await b.walk(166, 6.8);
+        await b.walk(150, 9.8);
+        await b.walk(162, 10.4);
+        await b.walk(173, 10.6);
       },
     },
     {
       name: 'coaster', cp: 2,
       async run() {
-        await b.walk(186, 8.8);
-        // run up the outer lane; the cars keep to the middle
-        for (const a of [230, 280, 330, 20, 70, 120, 170, 220, 262]) await b.walk(a, 8.9, { tol: 0.45 });
-        await b.walk(285, 8.4);
-        b.expect(Math.abs(Y() - 37) < 0.3, 'to be at the top station');
+        const cars = b.mover('coaster_car').map((c) => c.m);
+        // how far up the lane the nearest oncoming car is (99 if none is near Indy's level)
+        const oncoming = () => {
+          let best = 99;
+          for (const c of cars) {
+            const p = c.object.position;
+            if (!c.object.visible || Math.abs(p.y - Y()) > 3) continue;
+            const d = norm(Math.atan2(p.x, p.z) / DEG - A()) * DEG * 7.6;
+            if (d > 0.4 && d < best) best = d;
+          }
+          return best;
+        };
+        await b.walk(186, 10.3);
+        // up the lane, jumping each train as it comes. Coming down on a car's roof is fine: walk on over the train.
+        const atTop = () => Y() > 36.9 && !!P().ground && !P().ground.mover;
+        const near = () => oncoming() < 4.4 && P().state === 'ground';
+        for (let i = 0; i < 600 && !atTop(); i++) {
+          await b.walk(A() + 8, 7.6, { until: () => near() || atTop(), tol: 0.4, max: 240 });
+          if (near() && !atTop()) await b.jump(A() + 30, 7.6, { hold: 30, within: 99 });
+        }
+        b.expect(atTop(), 'to be at the top station');
+        // round the outside of the car shed
+        await b.walk(246, 10.2); await b.walk(264, 10.4); await b.walk(279, 10.2); await b.walk(286, 8.4);
         await b.beat(1.5);
         await b.walk(305.5, 8.3);
       },
@@ -63,7 +83,7 @@
       async run() {
         await b.walk(307, 7.9);
         const car = b.mover('drop_car')[0].m;
-        await b.wait(() => car.object.position.y < 37.02 && ((G().time) % 11.5) < 1.2, 2400, 'drop car at the bottom');
+        await b.wait(() => car.object.position.y < 37.02, 900, 'drop car at the bottom');
         await b.walk(322, 7.7);
         b.expect(P().ground && P().ground.mover === car, 'to stand on the drop car');
         await b.wait(() => car.object.position.y > 54.45, 1200, 'top of the drop ride');
@@ -82,65 +102,72 @@
         await b.jump(A() + 0.5, 8.2, { hold: 12 });
         b.expect(P().ground && P().ground.mover && P().ground.mover.name === 'swing_chair', 'to be on a swing seat');
         const seat = P().ground.mover;
-        await b.wait(() => { const a = Math.atan2(seat.object.position.x, seat.object.position.z) * 180 / Math.PI; return norm(a - 196) > 0 && norm(a - 196) < 8; }, 1200, 'the high side');
-        await b.jump(A() + 9, 6.2, { hold: 8 });
-        b.expect(Math.abs(Y() - 59.2) < 0.3, 'to be on the exit deck');
+        // on the high side the seat sweeps along the exit deck, which is just outside it: step off
+        await b.wait(() => { const a = Math.atan2(seat.object.position.x, seat.object.position.z) * 180 / Math.PI; return norm(a - 166) > 0 && norm(a - 166) < 8; }, 1200, 'the high side');
+        await b.walk(A() + 9, 10.7, { tol: 0.4, max: 200, fall: true });
+        b.expect(Math.abs(Y() - 58.9) < 0.3 && P().ground && !P().ground.mover, 'to be on the exit deck');
         await b.beat(1.5);
-        await b.walk(214, 6.1, { meow: true });
+        await b.walk(180, 10.2, { meow: true });
       },
     },
     {
       name: 'festival', cp: 5,
       async run() {
         b.autoMeow = true;          // gull country from here on
-        await b.walk(230.5, 6.8);
-        await b.jump(240, 10.6);
-        await b.jump(249, 11.4); await b.jump(259, 11.4); await b.jump(269, 11.0);
-        await b.jump(281, 8.8);
+        await b.walk(191, 11.3, { meow: true });
+        for (const a of [206.7, 225.7, 244.7, 263.7]) await b.jump(a, 11.3);
+        await b.jump(277.5, 11.3);
         b.expect(Math.abs(Y() - 66.2) < 0.4, 'to be on the deck past the balloons');
         await b.beat(1.5);
-        await b.walk(280, 8.3);
+        await b.walk(280, 8.4);
         await b.walk(280, 7.0, { until: () => P().state === 'climb', max: 300 });
         await b.climb(99); await b.land(280, 6.2);
         b.expect(Math.abs(Y() - 74.2) < 0.3, 'to be above the ladders');
         // stepping pads, between gusts
-        for (const [a, r] of [[301, 7.3], [336, 7.4], [12, 7.3], [48, 7.4]]) {
+        for (const [a, r] of [[304, 7.3], [338, 7.4], [12, 7.3], [46, 7.4]]) {
           await b.wait(windCalm, 900, 'calm air');
           await b.walk(A() + 4.5, r, { tol: 0.25, max: 120 });
           await b.wait(windCalm, 900, 'calm air');
           await b.jump(a, r, { meow: true });
         }
         b.expect(Math.abs(Y() - 79.6) < 0.4, 'to be on the last pad');
-        // the hot-air balloon lift
+        // the hot-air balloon lift: it waits beside the last pad and rises once Indy is on it
         const hab = b.mover('hot_air_balloon')[0].m;
-        await b.walk(54, 7.9, { tol: 0.25 });
-        await b.wait(() => hab.object.position.y < 80.7 && windCalm(), 2400, 'the balloon to come down');
-        await b.jump(66, 10.6);
+        await b.wait(() => hab.object.position.y < 80.5 && windCalm(), 1200, 'the balloon to be down');
+        await b.walk(A() + 5, 7.5, { tol: 0.25, max: 120 });
+        await b.jump(80, 8.0);
         b.expect(P().ground && P().ground.mover === hab, 'to stand on the balloon');
-        await b.wait(() => hab.object.position.y > 86.1, 1200, 'the balloon to rise');
-        await b.walk(73, 10.2, { tol: 0.3, max: 120 });
-        await b.jump(93, 8.8, { meow: true });
+        await b.wait(() => hab.object.position.y > 86.7, 1200, 'the balloon to rise');
+        await b.walk(86, 8.2, { tol: 0.3, max: 120 });
+        await b.jump(110, 8.7, { meow: true });
         b.expect(Math.abs(Y() - 86.6) < 0.4, 'to be on the deck under the banner');
-        await b.walk(99, 8.0, { meow: true });
-        await b.walk(99, 6.6, { until: () => P().state === 'climb', max: 300 });
-        await b.climb(99, { meow: true }); await b.land(99, 6.0);
+        await b.walk(117, 8.0, { meow: true });
+        await b.walk(117, 6.6, { until: () => P().state === 'climb', max: 300 });
+        await b.climb(99, { meow: true }); await b.land(117, 6.0);
         b.expect(Math.abs(Y() - 92.5) < 0.3, 'to be on the ring balcony');
         await b.beat(1.5);
-        await b.walk(118, 5.9);
+        await b.walk(124, 5.9);
       },
     },
     {
       name: 'underside', cp: 7,
       async run() {
         b.autoMeow = true;
-        await b.walk(126, 6.3);
-        for (const [a, r] of [[131, 8.4], [143, 10.0], [155, 11.6], [167, 13.4], [179, 15.6], [190, 16.9]]) await b.jump(a, r);
-        await b.jump(200, 15.8);
+        await b.walk(134, 6.3);
+        await b.walk(134, 10.0);                   // out along the plank
+        await b.jump(159, 10.0); await b.jump(184, 10.0);
+        await b.jump(207, 10.2);                   // onto the strut
+        b.expect(Math.abs(Y() - 95.5) < 0.2, 'to be on the strut');
+        await b.beat(1);
+        await b.walk(209.5, 16.3);                 // out along it
+        await b.jump(225.7, 16.3); await b.jump(241, 16.3);
+        // the banner hangs right behind the last lantern: push into it
+        await b.walk(241, 15.5, { until: () => P().state === 'climb', max: 200 });
         b.expect(P().state === 'climb', 'to grab the banner under the brim');
-        await b.climb(999); await b.land(201, 14.2);
+        await b.climb(999); await b.land(242, 14.2);
         b.expect(Math.abs(Y() - 99.5) < 0.3, 'to be on the observation deck brim');
         await b.beat(1.5);
-        await b.walk(208, 14);
+        await b.walk(249, 14);
       },
     },
     {
@@ -148,26 +175,28 @@
       async run() {
         b.autoMeow = true;
         // along the brim: shoo the jackdaws, slip past the sparklers when they are off
-        await b.walk(216, 14.1, { meow: true });
+        await b.walk(257, 14.1, { meow: true });
         await b.hold({ meow: true }, 30);
-        await b.walk(236, 14.2, { meow: true });
+        await b.walk(277, 14.2, { meow: true });
         const sparks = ent('sparkler');
-        for (const a of [244, 262, 280]) {
+        for (const a of [285, 303, 321]) {
           const s = sparks.find((e) => Math.abs(norm(Math.atan2(e.pos.x, e.pos.z) * 180 / Math.PI - a)) < 2 && e.pos.y < 105);
           await b.walk(a - 5, 14.0);
           await b.wait(() => { const o = s.o, k = (G().time + o.phase) % (o.on + o.off); return k > o.on + 0.1 && k < o.on + 0.5; }, 600, 'sparkler off');
           await b.jump(a + 5, 14.0, { hold: 12 });
         }
-        await b.walk(292, 14.6);
-        // a rope on the revolving brim comes by: leap out and grab it
-        await b.wait(() => { const p = P(); return G().world.climbs.some((c) => c.mover && c.type === 'pole' && (() => { const q = c.mover.object.position; const a = Math.atan2(q.x, q.z) * 180 / Math.PI; return norm(a - A()) > -4.5 && norm(a - A()) < -2.5; })()); }, 3600, 'a rope');
-        await b.jump(A() + 0.5, 17.5, { hold: 20 });
+        await b.walk(338, 14.7);
+        // out on the jetty, under the path of the ropes that hang from the revolving brim: jump up as one comes by
+        await b.walk(344, 15.0); await b.walk(344, 17.4, { tol: 0.25 });
+        await b.wait(() => G().world.climbs.some((c) => { if (!c.mover || c.type !== 'pole') return false; const q = c.mover.object.position; const d = norm(Math.atan2(q.x, q.z) / DEG - A()); return d > -3 && d < -0.5; }), 3600, 'a rope');
+        await b.jump(A(), 17.45, { hold: 20, still: true });
         b.expect(P().state === 'climb', 'to hang on the rope');
-        await b.climb(999); await b.land(A(), 15.3);
+        await b.climb(999); await b.land(A(), 15.6);
         b.expect(Math.abs(Y() - 103) < 0.3 && P().ground && P().ground.mover, 'to stand on the revolving brim');
         // ride round to a rope that hangs from the roof
-        await b.wait(() => [60, 180, 300].some((a) => norm(a - A()) > 3 && norm(a - A()) < 6), 3600, 'a roof rope');
-        const target = [60, 180, 300].find((a) => norm(a - A()) > 0 && norm(a - A()) < 12);
+        const ropes = [0, 60, 120, 180, 240, 300];
+        await b.wait(() => ropes.some((a) => norm(a - A()) > 3 && norm(a - A()) < 6), 3600, 'a roof rope');
+        const target = ropes.find((a) => norm(a - A()) > 0 && norm(a - A()) < 12);
         await b.walk(target - 3, 16.0, { tol: 0.3, max: 200 });
         await b.jump(target, 17.5, { hold: 16 });
         b.expect(P().state === 'climb', 'to hang on the roof rope');

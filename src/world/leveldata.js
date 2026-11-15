@@ -3,7 +3,7 @@
 // height y. See CLAUDE.md "World conventions".
 import * as THREE from 'three';
 import { assets } from '../core/assets.js';
-import { cyl, placeCyl, orbit, spin, ferris, bob, dropRide, helix } from './movers.js';
+import { cyl, orbit, ferris, bob, track } from './movers.js';
 
 const DEG = Math.PI / 180;
 
@@ -12,7 +12,7 @@ export const SECTION_NAMES = [
   'Festival Skies', 'Under the Saucer', 'The Revolving Restaurant', 'The Needle',
 ];
 // lowest footing of each section, used to tell where Indy is
-export const SECTION_Y = [-100, 1.0, 16.3, 36.8, 54.3, 59.0, 92.3, 99.3, 106.6];
+export const SECTION_Y = [-100, 1.0, 16.3, 36.8, 54.3, 58.7, 92.3, 99.3, 106.6];
 
 export const TOP_Y = 140;
 const FESTIVE = ['#e8443a', '#ffc93c', '#2bb3a6', '#3d7fe0', '#f27aa8', '#8a5bd6', '#f58a2c'];
@@ -123,39 +123,111 @@ function bigWheel(L) {
 }
 
 // ---------------------------------------------------------------------------------------------------- 2 the spiral coaster
-const COASTER = { a0: 190, a1: 640, y0: 16.6, y1: 37.0, rIn: 6.0, rOut: 9.2 };
+// The ramp is the coaster's track: a lane just wide enough for a car, railed on both sides, with lay-bys on the outside
+// to wait in. Trains come out of a shed at the top station and roll down into a shed at the bottom one, so they are
+// never seen to appear or vanish, and bulbs on the rail light up ahead of them. Angles run on past 360 up the spiral.
+const COASTER = { a0: 200, a1: 600, y0: 16.6, y1: 37.0, rIn: 6.5, rOut: 8.7, mid: 7.6, bays: [250, 325, 400, 475, 550], bay: 8, bayOut: 10.5 };
 function coaster(L) {
-  const { a0, a1, y0, y1, rIn, rOut } = COASTER;
-  L.arcDeck(128, a0, 5.5, rOut, y0, y0, { top: 'wood_light' });
-  L.checkpoint(168, 6.6, y0, 2);
-  // the track: a planked ramp with two rails
+  const { a0, a1, y0, y1, rIn, rOut, mid, bays, bay, bayOut } = COASTER;
+  const at = (a) => y0 + (y1 - y0) * Math.min(1, Math.max(0, (a - a0) / (a1 - a0)));
+  const shedB = [184, 161], shedT = [a1 + 12, a1 + 35];        // [curtain, back wall] of the two car sheds
+  L.camZone({ y0: y0 - 0.3, y1: y1 + 0.6, rMax: 12.5, lead: 1.9, lift: 0.8 });
+
+  // bottom station: wide enough to walk round the shed on the outside
+  L.arcDeck(128, a0, 5.5, 11.6, y0, y0, { top: 'wood_light' });
+  for (const a of [136, 164, 182, 197]) L.decor('bracket', a, 11.1, y0 - 0.3);
+  L.checkpoint(173, 10.6, y0, 2);
+  carShed(L, shedB[0], shedB[1], y0);
+
+  // the track: a planked ramp, and the cars' rails, which run on through both stations into the sheds
   L.arcDeck(a0, a1, rIn, rOut, y0, y1, { top: 'wood', side: 'steel_dark', alt: 'yellow', step: 5 });
-  for (const rr of [6.85, 8.2]) L.arcDeck(a0, a1, rr, rr + 0.16, y0 + 0.1, y1 + 0.1, { top: 'red', side: 'red', alt: 'red', thick: 0.1, collide: false, step: 5 });
-  for (let a = a0 + 15; a < a1; a += 30) {
-    const y = y0 + (y1 - y0) * (a - a0) / (a1 - a0);
-    L.decor('bracket', a, rOut - 0.5, y - 0.3);
+  for (const rr of [6.85, 8.2]) {
+    const o = { top: 'red', side: 'red', alt: 'red', thick: 0.1, collide: false, step: 5 };
+    L.arcDeck(shedB[1], a0, rr, rr + 0.16, y0 + 0.1, y0 + 0.1, o);
+    L.arcDeck(a0, a1, rr, rr + 0.16, y0 + 0.1, y1 + 0.1, o);
+    L.arcDeck(a1, shedT[1], rr, rr + 0.16, y1 + 0.1, y1 + 0.1, o);
   }
-  L.decor('station_arch', a0 + 1, 7.6, y0, { yaw: 90 });
-  L.decor('station_arch', a1 - 1, 7.6, y1, { yaw: 90 });
-  // trains of two cars roll down the track; jump over them or step aside
-  const mid = (rIn + rOut) / 2;
+  for (let a = a0 + 15; a < a1; a += 30) L.decor('bracket', a, rOut - 0.5, at(a) - 0.3);
+  L.decor('station_arch', a0 - 0.5, mid, y0, { yaw: 90 });
+  L.decor('station_arch', a1 + 0.5, mid, y1, { yaw: 90 });
+
+  // the inner side is fenced too high to jump: behind it is the gap to the tower wall
+  L.arcWall(a0, a1, rIn, y0, y1, 3.6);
+  L.arcRail(a0, a1, rIn + 0.06, y0, y1, { color: 'steel_dark', height: 0.9 });
+  // the outer side has a low rail, open at each lay-by
+  let from = a0;
+  for (const c of [...bays, null]) {
+    const to = c == null ? a1 : c - bay;
+    L.arcWall(from, to, rOut, at(from), at(to), 0.9);
+    L.arcRail(from, to, rOut - 0.06, at(from), at(to));
+    if (c == null) break;
+    L.arcDeck(c - bay, c + bay, rOut, bayOut, at(c - bay), at(c + bay), { top: 'wood_light', side: 'steel_dark', alt: 'yellow', step: 4 });
+    L.arcWall(c - bay, c + bay, bayOut, at(c - bay), at(c + bay), 0.9);
+    L.arcRail(c - bay, c + bay, bayOut - 0.06, at(c - bay), at(c + bay));
+    for (const e of [c - bay, c + bay]) {
+      L.radialWall(e, rOut, bayOut, at(e), 0.9);
+      L.box(e, (rOut + bayOut) / 2, at(e) + 0.8, [0.12, 0.1, bayOut - rOut], 'yellow', { collide: false });
+    }
+    L.decor('bracket', c, bayOut - 0.4, at(c) - 0.3);
+    if (c !== 400) { L.treat(c - 3, 9.6, at(c - 3)); L.treat(c + 3, 9.6, at(c + 3)); }
+    from = c + bay;
+  }
+
+  // trains of two cars. Each car starts inside the top shed and ends inside the bottom one.
+  const pts = [[shedT[1] - 9.3, y1 + 0.12], [a1, y1 + 0.12], [a0, y0 + 0.12], [shedB[1] + 9.3, y0 + 0.12]];
+  const cars = [];
   for (const [phase, tint] of [[0, '#e8443a'], [0.5, '#2bb3a6']]) {
     for (let c = 0; c < 2; c++) {
-      const m = L.mover('coaster_car', helix({ a0: a1, a1: a0, y0: y1 + 0.12, y1: y0 + 0.12, r: mid, speed: 6.5, phase: phase - c * 0.034, gap: 14 }), { tint });
-      L.bumper(m);
+      const fn = track({ r: mid, pts, speed: 4.5, phase, offset: c * 2.6, gap: 11, pre: 9 });
+      L.bumper(L.mover('coaster_car', fn, { tint }), { pop: true, honk: 22 });
+      cars.push(fn);
     }
   }
-  L.hint((p) => p.pos.y > y0 - 0.5 && p.pos.y < y0 + 3 && p.radial < 10, 'Coaster cars! Jump over them. In the air, {jump} again to pounce.');
-  // treats up the ramp, a heart half way
-  const at = (a) => y0 + (y1 - y0) * (a - a0) / (a1 - a0);
-  for (let a = a0 + 20; a < a1 - 10; a += 22) L.treat(a, a % 44 < 22 ? 6.5 : 8.7, at(a));
-  L.heart(415, 9.9, at(415) + 0.2);
-  // the hidden charm: a balloon bunch floating off the track, a pounce away
-  L.mover('balloon_bunch', bob({ a: 400, r: 13.6, y: at(400) + 1.0, amp: 0.3, period: 5 }));
-  L.charm(400, 13.6, at(400) + 1.4);
-  // top station
-  L.arcDeck(a1 - 360, 309.5, 5.5, rOut, y1, y1, { top: 'wood_light' });
+  // warning bulbs along the outer rail
+  const spots = [];
+  const s0 = (pts[0][0] - a1) * DEG * mid, rampLen = Math.hypot((a1 - a0) * DEG * mid, y1 - y0);
+  for (let a = a1 - 4; a > a0; a -= 8) {
+    const inBay = bays.some((c) => Math.abs(c - a) < bay);
+    spots.push({ pos: cyl(a, (inBay ? bayOut : rOut) - 0.06, at(a) + 1.02), s: s0 + rampLen * (a1 - a) / (a1 - a0) });
+  }
+  L.trackLights(spots, cars, { ahead: 14 });
+  L.hint((p) => p.pos.y > y0 - 0.5 && p.pos.y < y0 + 3 && p.radial < 12.5 && Math.abs(((p.angle / DEG + 360) % 360) - 190) < 22,
+    'Coaster cars! Jump over them, or wait in a lay-by. In the air, {jump} again to pounce.');
+
+  // treats up the ramp, a heart in the middle lay-by
+  for (let a = a0 + 20; a < a1 - 10; a += 22) L.treat(a, a % 44 < 22 ? 7.1 : 8.1, at(a));
+  L.heart(400, 9.6, at(400) + 0.2);
+  // the hidden charm: a balloon bunch floating off that lay-by, a pounce away
+  L.mover('balloon_bunch', bob({ a: 400, r: 14.9, y: at(400) + 1.0, amp: 0.3, period: 5 }));
+  L.charm(400, 14.9, at(400) + 1.4);
+
+  // top station: the trains come out of their shed here; the way on is round the outside of it
+  L.arcDeck(a1 - 360, 283, 5.5, 11.6, y1, y1, { top: 'wood_light' });
+  L.arcDeck(283, 309.5, 5.5, 9.2, y1, y1, { top: 'wood_light' });
+  for (const a of [246, 264, 280]) L.decor('bracket', a, 11.1, y1 - 0.3);
+  carShed(L, shedT[0] - 360, shedT[1] - 360, y1);
   L.checkpoint(305.5, 8.3, y1, 3);
+}
+
+/** A car shed over the end of the coaster track: the cars come and go through its strip curtain. */
+function carShed(L, aMouth, aBack, y) {
+  const mid = COASTER.mid, ac = (aMouth + aBack) / 2, len = Math.abs(aBack - aMouth) * DEG * mid, hl = len / 2;
+  const s = Math.sign(aMouth - aBack), h = 2.3;
+  // a box in the shed's own frame: dx along the track (toward increasing angle), dz outward
+  const local = (dx, dz, yy, size, color, opts = {}) => {
+    const p = cyl(ac, mid + dz, 0);
+    p.x += Math.cos(ac * DEG) * dx; p.z -= Math.sin(ac * DEG) * dx;
+    const a = Math.atan2(p.x, p.z) / DEG;
+    return L.box(a, Math.hypot(p.x, p.z), yy, size, color, { ...opts, yaw: ac - a });
+  };
+  for (const dz of [-1.25, 1.25]) local(0, dz, y + h / 2, [len, h, 0.2], 'teal');
+  local(-s * (hl - 0.1), 0, y + h / 2, [0.2, h, 2.5], 'teal');
+  local(0, 0, y + h + 0.12, [len + 0.5, 0.25, 3.1], 'red');
+  local(0, 0, y + h + 0.33, [len - 0.3, 0.18, 2.2], 'cream');
+  // the mouth: a yellow frame and a curtain of strips (solid for Indy; the cars push through it)
+  for (const dz of [-1.25, 1.25]) local(s * hl, dz, y + h / 2, [0.3, h, 0.3], 'yellow');
+  local(s * hl, 0, y + h - 0.2, [0.3, 0.4, 2.8], 'yellow');
+  for (let i = 0; i < 6; i++) local(s * (hl - 0.05), -0.9 + i * 0.36, y + 0.95, [0.1, 1.9, 0.34], i % 2 ? 'cream' : 'red');
 }
 
 // ---------------------------------------------------------------------------------------------------- 3 the drop and the nets
@@ -164,9 +236,10 @@ function dropAndNets(L) {
   for (let y = 33; y < 57; y += 4) L.decor('drop_rail', a, r, y);
   L.decor('drop_top', a, r, 57);
   for (let y = 35; y < 57; y += 6) L.box(a, 5.9, y, [0.5, 0.25, 1.6], 'steel_dark', { collide: false });
-  L.mover('drop_car', dropRide({ a, r, y0, y1, up: 5.5, holdTop: 2.4, down: 1.0, holdBottom: 2.6 }));
+  // the car waits at the bottom and goes up when Indy is on board; once he has left it at the top, it drops
+  L.lift('drop_car', { a, r, y0, y1, speed: 5.4, accel: 9, delay: 0.5, linger: 1.0, drop: true });
   L.hint((p) => Math.abs(p.pos.y - y0) < 1.5 && p.radial < 10 && Math.abs(((p.angle / DEG + 360) % 360) - 310) < 14, 'Ride the drop car up, or take the nets.');
-  // the slower, safer way: three nets
+  // the slower way: three nets
   L.piece('net', 291, 7.4, 37);
   L.piece('deck_m', 291, 6.2, 42);
   L.piece('deck_s', 277, 8.9, 42);
@@ -192,9 +265,9 @@ function dropAndNets(L) {
 }
 
 // ---------------------------------------------------------------------------------------------------- 4 the wave swinger
-const SWING = { y: 61.5, tilt: 2.0, phase: 110, r: 8.2, speed: 26 };
+const SWING = { y: 61.5, tilt: 2.0, phase: 110, r: 8.2, speed: 26, exitY: 58.9 };
 function swinger(L) {
-  const { y, tilt, phase, r, speed } = SWING;
+  const { y, tilt, phase, r, speed, exitY } = SWING;
   // the tilted, spinning canopy
   const hub = assets.kit('swing_hub');
   const tiltGroup = new THREE.Group();
@@ -207,98 +280,127 @@ function swinger(L) {
   for (let i = 0; i < 12; i++) {
     L.mover('swing_chair', orbit({ a0: i * 30, r, y, speed, tilt, tiltPhase: phase }), { tint: FESTIVE[i % FESTIVE.length] });
   }
-  L.hint((p) => Math.abs(p.pos.y - 54.5) < 1 && p.radial < 8 && Math.abs(((p.angle / DEG + 540) % 360) - 180 - 10) < 25, 'Jump onto a swing seat. It carries you up and around.');
-  for (let a = 40; a <= 180; a += 20) L.treat(a, r, y - 4 + tilt * Math.sin((a - phase) * DEG) + 0.9);
-  // exit deck on the high side
-  L.arcDeck(178, 232, 5.3, 7.1, 59.2, 59.2);
-  L.checkpoint(214, 6.1, 59.2, 5);
-  L.jackdaw(196, 6.2, 59.2, { yaw: 0 });
+  L.hint((p) => Math.abs(p.pos.y - 54.5) < 1 && p.radial < 8 && Math.abs(((p.angle / DEG + 540) % 360) - 180 - 10) < 25, 'Jump onto a swing seat. Ride it up, then hop off onto the deck outside.');
+  for (let a = 40; a <= 140; a += 20) L.treat(a, r, y - 4 + tilt * Math.sin((a - phase) * DEG) + 0.9);
+  // The exit deck is on the high side, just outside the ring of seats, which sweep along it at its own height: Indy
+  // steps off sideways onto it. (Nothing fixed can cross the seats' path, so it hangs on beams that run under them.)
+  L.arcDeck(156, 193.5, 9.3, 12.2, exitY, exitY);
+  for (const a of [159, 175, 190.5]) L.box(a, 8.45, exitY - 0.45, [0.34, 0.3, 7.3], 'steel_dark', { collide: false });
+  L.treatLine([160, 10.6, exitY], [172, 10.6, exitY], 3);
+  L.checkpoint(181, 11.4, exitY, 5);
 }
 
 // ---------------------------------------------------------------------------------------------------- 5 festival skies
 function festivalSkies(L) {
-  // out and around the swinger's canopy on balloons
-  L.piece('deck_s', 240, 10.6, 59.7);
-  L.treat(240, 10.6, 59.7);
-  L.mover('balloon_bunch', bob({ a: 249, r: 11.4, y: 61.2, amp: 0.35, period: 4.2 }));
-  L.mover('balloon_bunch', bob({ a: 259, r: 11.4, y: 63.0, amp: 0.35, period: 5.0, phase: 0.4 }));
-  L.mover('balloon_bunch', bob({ a: 269, r: 11.0, y: 64.8, amp: 0.35, period: 4.6, phase: 0.7 }));
-  L.treat(249, 11.4, 62); L.treat(259, 11.4, 63.8); L.treat(269, 11, 65.6);
-  L.piece('deck_m', 281, 8.6, 66.2);
-  L.heart(285, 8.8, 66.2);
+  // Up and around the swinger's canopy on balloons. They float at one radius, the exit deck's, and rise in even steps,
+  // so every hop is straight along the tower; they bob together, so the steps stay even. Spacing (here and for the
+  // pads and lanterns further up) is set by the jump: a full jump held to the right lands on the next one whether it
+  // is made standing in the middle of this one or running off its far edge.
+  const R = 11.3;
+  [[206.7, 60.36], [225.7, 61.82], [244.7, 63.28], [263.7, 64.74]].forEach(([a, y], i) => {
+    L.mover('balloon_bunch', bob({ a, r: R, y, amp: 0.25, period: 4.6, phase: i * 0.08 }), { scale: 1.3 });
+    L.treat(a, R, y + 0.8);
+  });
+  L.camZone({ y0: SWING.exitY - 0.3, y1: 67.5, rMin: 9, lift: 2.0 });
+  // a deep landing, so that the way in to the ladders is on foot
+  L.arcDeck(274.7, 292, 7.4, 12.2, 66.2, 66.2);
+  for (const a of [277.5, 289.5]) L.box(a, 8.5, 65.75, [0.34, 0.3, 7.4], 'steel_dark', { collide: false });
+  L.heart(289.5, 10.0, 66.2);
+  L.jackdaw(287, 11.3, 66.2, { yaw: -90 });
   // ladders up
   L.piece('ladder', 280, 7.35, 66.2);
   L.piece('ladder', 280, 7.35, 70.2);
   L.piece('deck_m', 280, 6.15, 74.2);
   L.treatLine([280, 8.1, 67.5], [280, 8.1, 72.5], 4);
   L.checkpoint(275, 6.0, 74.2, 5);
-  // stepping pads in the wind
-  const pads = [[301, 7.3, 75.4], [336, 7.4, 76.8], [372, 7.3, 78.2], [408, 7.4, 79.6]];
-  for (const [a, r, y] of pads) { L.piece('deck_round', a, r, y); L.treat(a, r, y); }
-  L.wind({ y0: 74.6, y1: 82.5, a0: 284, a1: 62, period: 6.5, blow: 2.3, strength: 15 });
-  L.hint((p) => p.pos.y > 73.8 && p.pos.y < 76 && Math.abs(((p.angle / DEG + 360) % 360) - 285) < 14, 'Wind! Wait for the gust to pass before you jump.');
+  // Stepping pads in the wind. The gusts blow along the tower, the way Indy is going, so a jump in a gust carries
+  // further: about 1.4 further, enough to overshoot a pad when running off the edge of the last one, not from its middle.
+  const pads = [[304, 7.3, 75.4], [338, 7.4, 76.8], [372, 7.3, 78.2], [406, 7.4, 79.6]];
+  for (const [a, r, y] of pads) { L.piece('deck_round', a, r, y, { scale: 1.25 }); L.treat(a, r, y); }
+  L.wind({ y0: 74.6, y1: 82.5, a0: 284, a1: 40, period: 6, blow: 2.1, strength: 16, along: 1 });
+  L.hint((p) => p.pos.y > 73.8 && p.pos.y < 76 && Math.abs(((p.angle / DEG + 360) % 360) - 287) < 16, 'Wind! A jump in a gust carries further.');
+  L.camZone({ y0: 73.9, y1: 88, lift: 1.6 });
   L.gull({ a: 330, r: 12.5, y: 80.5, arc: 45, speed: 0.4 });
-  // the hot-air balloon lift
-  L.mover('hot_air_balloon', bob({ a: 66, r: 10.6, y: 83.4, amp: 3.0, period: 10 }), { tint: '#e8443a' });
-  L.treatLine([66, 10.6, 84], [66, 10.6, 88], 3);
-  L.piece('deck_m', 95, 8.6, 86.6);
-  L.jackdaw(100, 9.2, 86.6, { yaw: -50 });
-  L.treat(92, 8.6, 86.6);
+  // the hot-air balloon lift: it waits beside the last pad and rises when Indy stands on it
+  L.lift('hot_air_balloon', { a: 80, r: 8.0, y0: 80.4, y1: 86.8, speed: 2.7, accel: 4, delay: 0.5, linger: 1.5, tint: '#e8443a' });
+  L.treatLine([80, 8.0, 82.2], [80, 8.0, 86.2], 3);
+  L.piece('deck_m', 113, 8.6, 86.6);
+  L.jackdaw(119, 9.2, 86.6, { yaw: -50 });
+  L.treat(110, 8.6, 86.6);
   // the banner up to the ring balcony
-  L.piece('banner', 99, 6.8, 93.35);
-  L.treatLine([99, 7.5, 87.6], [99, 7.5, 91.6], 3);
-  L.gull({ a: 140, r: 12, y: 90, arc: 50, speed: 0.36 });
-  L.checkpoint(118, 5.85, 92.5, 6);
-  L.heart(84, 5.9, 92.5);
+  L.piece('banner', 117, 6.8, 93.35);
+  L.treatLine([117, 7.5, 87.6], [117, 7.5, 91.6], 3);
+  L.gull({ a: 150, r: 12, y: 90, arc: 50, speed: 0.36 });
+  L.checkpoint(124, 5.85, 92.5, 6);
+  L.heart(102, 5.9, 92.5);
 }
 
 // ---------------------------------------------------------------------------------------------------- 6 under the saucer
 function underside(L) {
-  // the last two hang clear of the brim, so nothing is overhead when Indy jumps for the banner
-  const lanterns = [[131, 8.4, 93.2], [143, 10.0, 94.1], [155, 11.6, 95.0], [167, 13.4, 95.8], [179, 15.6, 96.5], [190, 16.9, 97.2]];
+  // Out from the balcony to the brim of the saucer. The way outward is walked, on a plank and then on a strut; the
+  // hops, along two rows of lanterns, all go straight along the tower. The last lantern hangs clear of the brim, in
+  // front of the banner: nothing is overhead there.
+  const rod = (a, r, y0, y1) => L.box(a, r, (y0 + y1) / 2, [0.08, y1 - y0, 0.08], 'steel_dark', { collide: false, cast: false });
+  L.box(134, 8.5, 92.4, [2.4, 0.2, 4.6], 'wood_light');
+  for (const s of [-1, 1]) rod(134 + s * 6, 10.5, 92.4, 98.3);
+  L.treatLine([134, 8, 92.5], [134, 10, 92.5], 2);
+  L.box(209.5, 12.85, 95.4, [3.0, 0.2, 8.5], 'wood_light');
+  for (const s of [-1, 1]) { rod(209.5 + s * 8, 10, 95.4, 98.1); rod(209.5 + s * 5.7, 14, 95.4, 99.05); }
+  L.treatLine([209.5, 11, 95.5], [209.5, 16, 95.5], 3);
+  const lanterns = [[159, 10.0, 93.5], [184, 10.0, 94.5], [225.7, 16.3, 96.4], [241, 16.3, 97.2]];
   lanterns.forEach(([a, r, y], i) => {
-    L.mover('lantern', bob({ a, r, y, amp: 0.18, period: 3.4 + i * 0.3, phase: i * 0.21 }));
+    L.mover('lantern', bob({ a, r, y, amp: 0.15, period: 3.6, phase: i * 0.1 }), { scale: 1.25 });
     L.treat(a, r, y);
   });
-  L.piece('banner_short', 200, 15.25, 99.95);
-  L.hint((p) => p.pos.y > 92.3 && p.pos.y < 94 && p.radial < 7.2 && Math.abs(((p.angle / DEG + 360) % 360) - 122) < 12, 'Lanterns make good stepping stones.');
+  L.piece('banner_short', 241, 15.25, 99.95);
+  L.camZone({ y0: 92.3, y1: 99.3, rMin: 6.9, lift: 1.8 });
+  L.hint((p) => p.pos.y > 92.3 && p.pos.y < 94 && p.radial < 7.2 && Math.abs(((p.angle / DEG + 360) % 360) - 130) < 12, 'Lanterns make good stepping stones.');
 }
 
 // ---------------------------------------------------------------------------------------------------- 7 the revolving restaurant
 const REST = { speed: 7, y: 103.0 };
 function restaurant(L) {
-  L.checkpoint(208, 14.0, 99.5, 7);
+  L.checkpoint(249, 14.0, 99.5, 7);
   // ledge A, the observation deck brim: birds and sparklers
-  L.jackdaw(222, 14.4, 99.5, { yaw: 180 });
-  L.jackdaw(226, 13.8, 99.5, { yaw: 160 });
-  L.sparkler(244, 14.3, 99.5, { phase: 0 });
-  L.sparkler(262, 13.6, 99.5, { phase: 1.2 });
-  L.sparkler(280, 14.4, 99.5, { phase: 2.4 });
-  for (let a = 212; a < 300; a += 9) if (![244, 262, 280].some((s) => Math.abs(s - a) < 4)) L.treat(a, 14.1, 99.5);
-  L.heart(310, 14.1, 99.5);
-  L.checkpoint(297, 14.0, 99.5, 7);
-  // ropes hang from the revolving brim above: ride one up
-  for (let i = 0; i < 4; i++) {
+  L.jackdaw(263, 14.4, 99.5, { yaw: 180 });
+  L.jackdaw(267, 13.8, 99.5, { yaw: 160 });
+  L.sparkler(285, 14.3, 99.5, { phase: 0 });
+  L.sparkler(303, 13.6, 99.5, { phase: 1.2 });
+  L.sparkler(321, 14.4, 99.5, { phase: 2.4 });
+  for (let a = 253; a < 341; a += 9) if (![285, 303, 321].some((s) => Math.abs(s - a) < 4)) L.treat(a, 14.1, 99.5);
+  L.heart(353, 14.1, 99.5);
+  L.checkpoint(336, 14.0, 99.5, 7);
+  // Ropes hang from the revolving brim above and sweep round just outside the ledge. A jetty reaches out under their
+  // path: Indy waits on it and jumps straight up as a rope comes by.
+  L.box(344, 16.6, 99.4, [1.7, 0.2, 3.6], 'wood_light');
+  L.decor('bracket', 344, 18.2, 99.3);
+  L.treat(344, 17.3, 99.5);
+  const ropeLen = 2.45;
+  for (let i = 0; i < 8; i++) {
     const g = new THREE.Group();
-    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 4.7, 8), L.mat('rope'));
-    rope.position.y = -2.35; rope.castShadow = true;
-    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), L.mat('rope'));
-    knot.position.y = -4.7;
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, ropeLen, 8), L.mat('rope'));
+    rope.position.y = -ropeLen / 2; rope.castShadow = true;
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), L.mat('rope'));
+    knot.position.y = -ropeLen;
+    const tassel = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 8), L.mat('red'));     // easy to see against the dusk
+    tassel.position.y = -ropeLen - 0.42;
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 1.5), L.mat('steel_dark'));
     arm.position.set(0, 0.05, -0.65);
-    g.add(rope, knot, arm);
-    const m = L.mover(g, orbit({ a0: i * 90, r: 17.45, y: REST.y + 0.45, speed: REST.speed }));
-    L.world.addClimbPole(0, 0, -4.7, 0, 0.1, m);
+    g.add(rope, knot, tassel, arm);
+    const m = L.mover(g, orbit({ a0: i * 45, r: 17.45, y: REST.y + 0.45, speed: REST.speed }));
+    L.world.addClimbPole(0, 0, -ropeLen - 0.5, 0, 0.1, m);
   }
-  L.hint((p) => Math.abs(p.pos.y - 99.5) < 0.6 && p.radial > 12 && Math.abs(((p.angle / DEG + 360) % 360) - 290) < 25, 'The restaurant above revolves. Leap out and grab a rope as it comes by.');
+  L.hint((p) => Math.abs(p.pos.y - 99.5) < 0.6 && p.radial > 12 && Math.abs(((p.angle / DEG + 360) % 360) - 339) < 20, 'The restaurant above revolves. Wait on the jetty and jump up to a rope as it comes by.');
   // on the revolving brim: treats float past
   for (let a = 0; a < 360; a += 24) L.treat(a, 15.3, REST.y);
-  // fixed ropes from the roof eave
-  for (const a of [60, 180, 300]) {
+  // fixed ropes from the roof eave, one never far away
+  for (let a = 0; a < 360; a += 60) {
     const p = cyl(a, 17.55, 107.35);
     const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.8, 8), L.mat('rope'));
     rope.position.set(p.x, p.y - 1.9, p.z); rope.castShadow = true;
-    L.root.add(rope);
+    const tassel = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 8), L.mat('red'));
+    tassel.position.set(p.x, p.y - 3.8 - 0.3, p.z);
+    L.root.add(rope, tassel);
     L.box(a, 17.2, 107.4, [0.22, 0.16, 1.2], 'steel_dark', { collide: false });
     L.world.addClimbPole(p.x, p.z, 103.55, 107.35, 0.1);
     L.checkpoint(a + 9, 14.6, null, 8);

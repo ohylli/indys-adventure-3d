@@ -21,6 +21,7 @@ const COLORS = {
   rope: '#c9a56a', green: '#4fb65a', orange: '#f58a2c', dark: '#2b2a30', concrete: '#bfae98',
 };
 const FESTIVE = ['#e8443a', '#ffc93c', '#2bb3a6', '#3d7fe0', '#f27aa8', '#f6ecd2', '#8a5bd6', '#f58a2c'];
+const NO_HELP = { lead: 1, lift: 0 };
 
 export class Level {
   constructor(ctx) {
@@ -38,6 +39,7 @@ export class Level {
     this.mats = new Map();
     this.instancers = new Map();
     this.spawn = { a: 0, r: 24, y: 0 };
+    this.camZones = [];               // { y0, y1, rMin, rMax, lead, lift }: see camZone()
   }
 
   mat(color) {
@@ -77,6 +79,7 @@ export class Level {
     group.add(obj);
     if (opts.yaw) obj.rotation.y = opts.yaw * DEG;
     if (opts.offset) obj.position.copy(opts.offset);
+    if (opts.scale) obj.scale.setScalar(opts.scale);
     this.scene.add(group);
     group.updateMatrixWorld(true);
     const geoms = [];
@@ -139,11 +142,52 @@ export class Level {
   box(a, r, y, size, color = 'wood', opts = {}) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), this.mat(color));
     placeCyl(mesh, a, r, y, opts.yaw || 0);
-    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.castShadow = opts.cast !== false; mesh.receiveShadow = true;
     this.root.add(mesh);
     mesh.updateWorldMatrix(true, false);
     if (opts.collide !== false) this.world.addStaticGeometry(bakeGeometry(mesh, mesh.matrixWorld));
     return mesh;
+  }
+
+  /**
+   * An invisible wall along the edge of a curved deck or ramp: a strip at radius r from angle a0 to a1, standing
+   * `height` tall on a floor that rises from y0 to y1. Rails are drawn thin, so this is what actually holds Indy in.
+   */
+  arcWall(a0, a1, r, y0, y1, height, step = 5) {
+    const n = Math.max(1, Math.round(Math.abs(a1 - a0) / step));
+    const pos = [];
+    for (let i = 0; i < n; i++) {
+      const aa = (a0 + (a1 - a0) * (i / n)) * DEG, ab = (a0 + (a1 - a0) * ((i + 1) / n)) * DEG;
+      const ya = y0 + (y1 - y0) * (i / n), yb = y0 + (y1 - y0) * ((i + 1) / n);
+      const A = [r * Math.sin(aa), ya, r * Math.cos(aa)], B = [r * Math.sin(ab), yb, r * Math.cos(ab)];
+      const A2 = [A[0], ya + height, A[2]], B2 = [B[0], yb + height, B[2]];
+      pos.push(...A, ...B, ...B2, ...A, ...B2, ...A2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.world.addStaticGeometry(g);
+  }
+
+  /** An invisible wall along a radius (the end of a deck): at angle a from radius r0 to r1, standing on y. */
+  radialWall(a, r0, r1, y, height) {
+    const A = cyl(a, r0, y), B = cyl(a, r1, y);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([A.x, y, A.z, B.x, y, B.z, B.x, y + height, B.z, A.x, y, A.z, B.x, y + height, B.z, A.x, y + height, A.z], 3));
+    this.world.addStaticGeometry(g);
+  }
+
+  /**
+   * A thin railing drawn along a curved edge: posts and a top bar (no collision: pair it with arcWall).
+   * opts: { height = 0.8, color, post = 8 (degrees between posts) }
+   */
+  arcRail(a0, a1, r, y0, y1, opts = {}) {
+    const h = opts.height ?? 0.8, color = opts.color || 'yellow';
+    this.arcDeck(a0, a1, r - 0.06, r + 0.06, y0 + h, y1 + h, { top: color, side: color, alt: color, thick: 0.1, collide: false, step: 4 });
+    const n = Math.max(1, Math.round(Math.abs(a1 - a0) / (opts.post ?? 8)));
+    for (let i = 0; i <= n; i++) {
+      const k = i / n;
+      this.box(a0 + (a1 - a0) * k, r, y0 + (y1 - y0) * k + h / 2 - 0.05, [0.12, h, 0.12], color, { collide: false });
+    }
   }
 
   /** A round platform with a hole (ring) or without, flat, centred on the tower axis. Collides. */
@@ -272,6 +316,31 @@ export class Level {
   sparkler(a, r, y, opts) { return this.add(new E.Sparkler(this.ctx, a, r, y, opts)); }
   water(a, r, y, radius) { return this.add(new E.Water(this.ctx, cyl(a, r, y), radius)); }
   bumper(mover, opts) { return this.add(new E.Bumper(this.ctx, mover, opts)); }
+
+  /**
+   * A ride that waits at the bottom and carries Indy up once he stands on it (no waiting for a timetable).
+   * opts: { a, r, y0, y1, speed (units/s), delay, linger, drop (fall back down fast instead of sinking), ...mover opts }
+   */
+  lift(nameOrObject, opts) {
+    const state = { h: 0 };
+    const mover = this.mover(nameOrObject, (t, o) => placeCyl(o, opts.a, opts.r, opts.y0 + (opts.y1 - opts.y0) * state.h), opts);
+    mover.lift = this.add(new E.Lift(this.ctx, mover, state, opts));
+    return mover;
+  }
+
+  /** Warning bulbs along a track: `spots` are { pos, s } with s the distance along the track. See E.TrackLights. */
+  trackLights(spots, cars, opts) { return this.add(new E.TrackLights(this.ctx, spots, cars, opts)); }
+
+  /**
+   * Camera help for a part of the tower: while Indy is between y0 and y1 (and radius rMin..rMax), the camera runs
+   * `lead` times further ahead of him round the tower and rides `lift` higher. Gaps are judged better from above.
+   */
+  camZone(zone) { this.camZones.push({ rMin: 0, rMax: 1e9, lead: 1, lift: 0, ...zone }); }
+  camHelp(player) {
+    const y = player.pos.y, r = player.radial;
+    for (const z of this.camZones) if (y >= z.y0 && y <= z.y1 && r >= z.rMin && r <= z.rMax) return z;
+    return NO_HELP;
+  }
   hint(test, text) { return this.add(new E.Hint(this.ctx, test, text)); }
   spinner(object, axis, speed) { object.userData.noMerge = true; this.spinners.push({ object, axis, speed }); return object; }
 

@@ -16,6 +16,8 @@ export const TUNE = {
   climbUp: 3.6, climbDown: 4.6, climbSide: 2.8, climbOffset: 0.44,
   leapOut: 5.4, leapUp: 10.6,
   snapDown: 0.36,
+  scrambleReach: 0.62,    // a ledge this far ahead of Indy...
+  scrambleMax: 0.9,       // ...and at most this far above his feet is clawed up instead of missed
   rescueDrop: 17,         // falling this far below the last footing triggers a rescue
 };
 
@@ -65,6 +67,7 @@ export class Player {
     this.frameAngle = 0;
     this.external = new THREE.Vector3();   // wind etc., units/s^2, set by the game each step
     this.vault = new THREE.Vector3(); this.vaultT = 0;
+    this.scrambleCool = 0;
     this.frozen = false;
     this.speed = 0;
   }
@@ -74,6 +77,7 @@ export class Player {
     this.state = 'air'; this.ground = null; this.climb = null; this.yaw = yaw;
     this.lastGroundY = p.y; this.coyote = 0; this.buffer = 0; this.canPounce = true; this.pouncing = false;
     this.airTime = 0; this.regrab = 0.3; this.vaultT = 0; this.noCut = false; this.hoppedOff = null;
+    this.scrambleCool = 0;
   }
 
   get radial() { return Math.hypot(this.pos.x, this.pos.z); }
@@ -89,6 +93,7 @@ export class Player {
     this.coyote = Math.max(0, this.coyote - dt);
     this.buffer = Math.max(0, this.buffer - dt);
     this.regrab = Math.max(0, this.regrab - dt);
+    this.scrambleCool = Math.max(0, this.scrambleCool - dt);
     if (inp.jumpPressed) this.buffer = T.buffer;
 
     this._carry();
@@ -253,7 +258,34 @@ export class Player {
         if (hit) { this._land(hit); return; }
       }
     }
-    if (this.regrab <= 0) this._tryGrab(false);
+    if (this.regrab <= 0 && this._tryGrab(false)) return;
+    if (this.vaultT <= 0 && this.regrab <= 0 && this.scrambleCool <= 0 && this.vel.y < 2.5) this._tryScramble(wishLen);
+  }
+
+  /**
+   * The ledge scramble: Indy has all but made a jump, with the edge of a platform just ahead of him and its top a
+   * little above his feet. Like any cat he claws his way up: a short committed hop onto it, as at the top of a climb.
+   */
+  _tryScramble(wishLen) {
+    const T = TUNE, world = this.world;
+    let dx, dz;
+    if (wishLen > 0.3) { dx = _wish.x; dz = _wish.z; }
+    else { const sp = Math.hypot(this.vel.x, this.vel.z); if (sp < 1.5) return false; dx = this.vel.x / sp; dz = this.vel.z / sp; }
+    // the first surface under a point ahead of him, looking from well above the highest ledge he can reach
+    _v.set(this.pos.x + dx * T.scrambleReach, this.pos.y + T.scrambleMax + 0.8, this.pos.z + dz * T.scrambleReach);
+    const hit = world.raycastDown(_v, T.scrambleMax + 0.8 - 0.15, _hit);
+    if (!hit || hit.normal.y < 0.62) return false;
+    const h = hit.point.y - this.pos.y;
+    if (h > T.scrambleMax) return false;
+    // there must be room to stand on it (this also rules out a hit from inside something solid)
+    _w.set(hit.point.x, hit.point.y + 0.1, hit.point.z);
+    if (world.raycast(_w, _c.set(0, 1, 0), 1.0) < 1.0) return false;
+    this.vel.set(dx * 3.2, Math.sqrt(2 * T.gravity * (h + 0.3)), dz * 3.2);
+    this.vault.set(dx * 3.2, 0, dz * 3.2); this.vaultT = 0.3; this.noCut = true;
+    this.scrambleCool = 0.5; this.pouncing = false;
+    this.yaw = Math.atan2(dx, dz);
+    this.events.push('scramble');
+    return true;
   }
 
   /**
@@ -398,13 +430,16 @@ export class Player {
       // over the top: a little hop onto whatever is up there
       this.climbY = y1 - 0.72; this._placeOnClimb();
       this.state = 'air'; this.climb = null; this.regrab = 0.4; this.airTime = 0;
-      // poles are climbed from any side: hop toward where the stick points, or toward the tower
-      if (cl.type !== 'plane') {
-        const rr = Math.hypot(this.pos.x, this.pos.z);
-        if (rr > 2.5) _n.set(this.pos.x / rr, 0, this.pos.z / rr);
-      }
       this.vel.set(-_n.x * 3.4, 9.3, -_n.z * 3.4);
-      this.vault.set(-_n.x * 3.4, 0, -_n.z * 3.4); this.vaultT = 0.34; this.noCut = true;
+      // A rope out on the tower's side is climbed from any side, and what is at its top is on the tower's side of it:
+      // hop to a spot a fixed way in from the rope itself, wherever Indy hung on it.
+      if (cl.type !== 'plane' && Math.hypot(this.pos.x, this.pos.z) > 2.5) {
+        let px = cl.x, pz = cl.z;
+        if (cl.mover) { _v.set(cl.x, cl.y0, cl.z).applyMatrix4(cl.mover.matrix); px = _v.x; pz = _v.z; }
+        const k = 1 - 1.6 / Math.hypot(px, pz);
+        this.vel.x = (px * k - this.pos.x) / 0.34; this.vel.z = (pz * k - this.pos.z) / 0.34;
+      }
+      this.vault.set(this.vel.x, 0, this.vel.z); this.vaultT = 0.34; this.noCut = true;
       this.hoppedOff = cl;            // not to be grabbed again until Indy has landed
       this.events.push('vault');
       return;
